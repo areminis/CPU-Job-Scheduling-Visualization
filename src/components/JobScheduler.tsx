@@ -12,9 +12,9 @@ import { Job, ScheduleResult } from "@/lib/types";
 
 const JobScheduler = () => {
   const { toast } = useToast();
-  const [cpuCount, setCpuCount] = useState<number>(2);
-  const [timeQuantum, setTimeQuantum] = useState<number>(1);
-  const [switchingOverhead, setSwitchingOverhead] = useState<number>(0.2);
+  const [cpuCount, setCpuCount] = useState<number | "">("");
+  const [timeQuantum, setTimeQuantum] = useState<number | "">("");
+  const [switchingOverhead, setSwitchingOverhead] = useState<number | "">("");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null);
   const [activeAlgorithm, setActiveAlgorithm] = useState<"SRTN" | "RR" | "">("");
@@ -66,7 +66,7 @@ const JobScheduler = () => {
       return false;
     }
     
-    if (cpuCount < 1) {
+    if (typeof cpuCount !== 'number' || cpuCount < 1) {
       toast({
         title: "Invalid CPU count",
         description: "Number of CPUs must be at least 1",
@@ -75,7 +75,7 @@ const JobScheduler = () => {
       return false;
     }
     
-    if (activeAlgorithm === "RR" && timeQuantum <= 0) {
+    if (activeAlgorithm === "RR" && (typeof timeQuantum !== 'number' || timeQuantum <= 0)) {
       toast({
         title: "Invalid time quantum",
         description: "Time quantum must be greater than 0",
@@ -84,7 +84,7 @@ const JobScheduler = () => {
       return false;
     }
     
-    if (switchingOverhead < 0) {
+    if (typeof switchingOverhead !== 'number' || switchingOverhead < 0) {
       toast({
         title: "Invalid switching overhead",
         description: "Switching overhead cannot be negative",
@@ -117,7 +117,11 @@ const JobScheduler = () => {
       remainingTime: job.burstTime
     }));
     
-    const result = calculateSRTN(jobsWithResetTime, cpuCount, switchingOverhead);
+    const result = calculateSRTN(
+      jobsWithResetTime, 
+      Number(cpuCount), 
+      Number(switchingOverhead)
+    );
     setScheduleResult(result);
     
     toast({
@@ -136,7 +140,12 @@ const JobScheduler = () => {
       remainingTime: job.burstTime
     }));
     
-    const result = calculateRoundRobin(jobsWithResetTime, cpuCount, timeQuantum, switchingOverhead);
+    const result = calculateRoundRobin(
+      jobsWithResetTime, 
+      Number(cpuCount), 
+      Number(timeQuantum), 
+      Number(switchingOverhead)
+    );
     setScheduleResult(result);
     
     toast({
@@ -147,7 +156,14 @@ const JobScheduler = () => {
 
   // Recalculate when inputs change if we have an active algorithm
   useEffect(() => {
-    if (activeAlgorithm && scheduleResult && jobs.length > 0) {
+    if (
+      activeAlgorithm && 
+      scheduleResult && 
+      jobs.length > 0 && 
+      typeof cpuCount === 'number' && 
+      (activeAlgorithm !== "RR" || typeof timeQuantum === 'number') && 
+      typeof switchingOverhead === 'number'
+    ) {
       if (activeAlgorithm === "SRTN") {
         calculateSRTNSchedule();
       } else if (activeAlgorithm === "RR") {
@@ -168,8 +184,9 @@ const JobScheduler = () => {
                 type="number"
                 min="1"
                 value={cpuCount}
-                onChange={(e) => setCpuCount(parseInt(e.target.value) || 1)}
+                onChange={(e) => setCpuCount(e.target.value ? parseInt(e.target.value) : "")}
                 className="w-full"
+                placeholder="Enter CPU count"
               />
             </div>
             <div>
@@ -180,8 +197,9 @@ const JobScheduler = () => {
                 min="0.1"
                 step="0.1"
                 value={timeQuantum}
-                onChange={(e) => setTimeQuantum(parseFloat(e.target.value) || 1)}
+                onChange={(e) => setTimeQuantum(e.target.value ? parseFloat(e.target.value) : "")}
                 className="w-full"
+                placeholder="For Round Robin"
               />
             </div>
             <div>
@@ -192,8 +210,9 @@ const JobScheduler = () => {
                 min="0"
                 step="0.1"
                 value={switchingOverhead}
-                onChange={(e) => setSwitchingOverhead(parseFloat(e.target.value) || 0)}
+                onChange={(e) => setSwitchingOverhead(e.target.value ? parseFloat(e.target.value) : "")}
                 className="w-full"
+                placeholder="Optional"
               />
             </div>
           </div>
@@ -234,8 +253,8 @@ const JobScheduler = () => {
                 process with the burst time of the newly arrived process.
               </p>
               <p className="text-sm text-gray-700 mt-2">
-                <strong>CPU Switching Overhead:</strong> {switchingOverhead > 0 ? 
-                  `${switchingOverhead.toFixed(1)} time units delay when switching jobs` : 
+                <strong>CPU Switching Overhead:</strong> {switchingOverhead ? 
+                  `${Number(switchingOverhead).toFixed(1)} time units delay when switching jobs` : 
                   "No switching overhead"}
               </p>
             </div>
@@ -245,13 +264,14 @@ const JobScheduler = () => {
                 <strong>Round Robin (RR)</strong> is a CPU scheduling algorithm where each process is 
                 assigned a fixed time slot in a cyclic way. It is designed especially for time-sharing 
                 systems. The scheduler assigns a fixed time unit per process, and cycles through them.
+                When a job completes before using its full time quantum, the next job starts immediately.
               </p>
               <p className="text-sm text-gray-700 mt-2">
-                <strong>Time Quantum:</strong> {timeQuantum.toFixed(1)} time units
+                <strong>Time Quantum:</strong> {timeQuantum ? Number(timeQuantum).toFixed(1) : "--"} time units
               </p>
               <p className="text-sm text-gray-700">
-                <strong>CPU Switching Overhead:</strong> {switchingOverhead > 0 ? 
-                  `${switchingOverhead.toFixed(1)} time units delay when switching jobs` : 
+                <strong>CPU Switching Overhead:</strong> {switchingOverhead ? 
+                  `${Number(switchingOverhead).toFixed(1)} time units delay when switching jobs` : 
                   "No switching overhead"}
               </p>
             </div>

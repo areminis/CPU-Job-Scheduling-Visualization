@@ -33,9 +33,10 @@ const JobList = ({ jobs, updateJob, scheduleResult }: JobListProps) => {
                   type="number"
                   min="0"
                   step="0.1"
-                  value={job.arrivalTime}
+                  value={job.arrivalTime || ""}
                   onChange={(e) => updateJob(job.id, "arrivalTime", parseFloat(e.target.value) || 0)}
                   className="w-full"
+                  placeholder="0.0"
                 />
               </TableCell>
               <TableCell>
@@ -43,9 +44,10 @@ const JobList = ({ jobs, updateJob, scheduleResult }: JobListProps) => {
                   type="number"
                   min="0.1"
                   step="0.1"
-                  value={job.burstTime}
+                  value={job.burstTime || ""}
                   onChange={(e) => updateJob(job.id, "burstTime", parseFloat(e.target.value) || 0.1)}
                   className="w-full"
+                  placeholder="1.0"
                 />
               </TableCell>
               <TableCell>

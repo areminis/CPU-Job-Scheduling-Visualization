@@ -308,7 +308,7 @@ export const calculateRoundRobin = (
     );
     readyQueue.push(...newlyArrivedJobs);
     
-    // Take queue snapshot if jobs arrived
+    // Take queue snapshot if jobs arrived or queue changed
     if (newlyArrivedJobs.length > 0 || readyQueue.length > 0) {
       queueSnapshots.push(takeQueueSnapshot(currentTime, readyQueue));
     }
@@ -320,6 +320,7 @@ export const calculateRoundRobin = (
         continue;
       }
       
+      // If CPU is empty and there are jobs in the ready queue, assign one
       if (cpuJobs[i] === null && readyQueue.length > 0) {
         cpuJobs[i] = readyQueue.shift()!;
         cpuTimeRemaining[i] = timeQuantum;
@@ -399,8 +400,37 @@ export const calculateRoundRobin = (
             turnaroundTime: nextEventTime - job.arrivalTime,
           };
           
-          // Free the CPU
-          cpuJobs[i] = null;
+          // Here's the key change: Immediately start a new job if available
+          // instead of waiting for quantum to expire
+          if (readyQueue.length > 0) {
+            // Add switching overhead if specified
+            if (switchingOverhead > 0) {
+              cpuOverheadEndTimes[i] = nextEventTime + switchingOverhead;
+              cpuTimeSlots.push({
+                cpuId: i,
+                jobId: "OVERHEAD",
+                startTime: nextEventTime,
+                endTime: cpuOverheadEndTimes[i],
+                isOverhead: true
+              });
+              
+              // Mark CPU as empty (it will get a new job after overhead)
+              cpuJobs[i] = null;
+            } else {
+              // If no overhead, assign next job immediately
+              cpuJobs[i] = readyQueue.shift()!;
+              // Give the new job a full time quantum
+              cpuTimeRemaining[i] = timeQuantum;
+              
+              // Record job start time if this is the first time it's running
+              if (jobStartTimes[cpuJobs[i]!.id] === null) {
+                jobStartTimes[cpuJobs[i]!.id] = nextEventTime;
+              }
+            }
+          } else {
+            // No job in queue, free the CPU
+            cpuJobs[i] = null;
+          }
         }
         // Check if quantum expired
         else if (cpuTimeRemaining[i] <= 0.00001) {
