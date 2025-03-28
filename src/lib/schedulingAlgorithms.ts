@@ -1,5 +1,5 @@
 
-import { Job, ScheduleResult, CPUTimeSlot } from "./types";
+import { Job, ScheduleResult, CPUTimeSlot, QueueSnapshot } from "./types";
 
 // Helper function to calculate average turnaround time
 const calculateAverageTurnaroundTime = (
@@ -14,6 +14,23 @@ const calculateAverageTurnaroundTime = (
   return (
     turnaroundTimes.reduce((sum, time) => sum + time, 0) / turnaroundTimes.length
   );
+};
+
+// Calculate CPU Utilization (excluding overhead)
+const calculateCPUUtilization = (
+  cpuTimeSlots: CPUTimeSlot[],
+  totalTime: number,
+  cpuCount: number
+): number => {
+  if (totalTime <= 0) return 0;
+  
+  const productiveTimeSlots = cpuTimeSlots.filter(slot => !slot.isOverhead);
+  const totalProductiveTime = productiveTimeSlots.reduce(
+    (sum, slot) => sum + (slot.endTime - slot.startTime),
+    0
+  );
+  
+  return (totalProductiveTime / (totalTime * cpuCount)) * 100;
 };
 
 // Sort function for job queue by arrival time
@@ -32,12 +49,33 @@ const sortByRemainingTime = (a: Job, b: Job): number => {
   return a.arrivalTime - b.arrivalTime;
 };
 
-export const calculateSRTN = (jobs: Job[], cpuCount: number): ScheduleResult => {
+// Create a deep copy of jobs
+const deepCopyJobs = (jobs: Job[]): Job[] => {
+  return JSON.parse(JSON.stringify(jobs)) as Job[];
+};
+
+// Take a snapshot of the ready queue
+const takeQueueSnapshot = (
+  time: number, 
+  readyQueue: Job[]
+): QueueSnapshot => {
+  return {
+    time,
+    readyQueue: deepCopyJobs(readyQueue)
+  };
+};
+
+export const calculateSRTN = (
+  jobs: Job[], 
+  cpuCount: number, 
+  switchingOverhead: number = 0
+): ScheduleResult => {
   // Create deep copies of jobs to avoid modifying the original array
-  let remainingJobs = JSON.parse(JSON.stringify(jobs)) as Job[];
+  let remainingJobs = deepCopyJobs(jobs);
   let runningJobs: Job[] = [];
   let completedJobs: Job[] = [];
   let cpuTimeSlots: CPUTimeSlot[] = [];
+  let queueSnapshots: QueueSnapshot[] = [];
   let currentTime = 0;
   let jobResults: { [jobId: string]: { startTime: number; endTime: number; turnaroundTime: number } } = {};
   
@@ -47,14 +85,18 @@ export const calculateSRTN = (jobs: Job[], cpuCount: number): ScheduleResult => 
     jobStartTimes[job.id] = null;
   });
   
-  // Initialize all CPUs as idle
+  // Initialize CPU states
   const cpuJobs: (Job | null)[] = Array(cpuCount).fill(null);
+  const cpuOverheadEndTimes: number[] = Array(cpuCount).fill(0);
   
   // Sort jobs by arrival time initially
   remainingJobs.sort(sortByArrivalTime);
   
+  // Take initial queue snapshot
+  queueSnapshots.push(takeQueueSnapshot(0, []));
+  
   // Continue until all jobs are completed
-  while (remainingJobs.length > 0 || runningJobs.length > 0) {
+  while (remainingJobs.length > 0 || runningJobs.length > 0 || cpuJobs.some(job => job !== null)) {
     // Move jobs that have arrived to the running queue
     const newlyArrivedJobs: Job[] = [];
     
@@ -74,20 +116,57 @@ export const calculateSRTN = (jobs: Job[], cpuCount: number): ScheduleResult => 
     // Sort running jobs by remaining time (SRTN algorithm)
     runningJobs.sort(sortByRemainingTime);
     
-    // Assign jobs to available CPUs
+    // Take queue snapshot after sorting
+    if (newlyArrivedJobs.length > 0 || runningJobs.length > 0) {
+      queueSnapshots.push(takeQueueSnapshot(currentTime, runningJobs));
+    }
+    
+    // Check if any CPU is in overhead time
     for (let i = 0; i < cpuCount; i++) {
-      // If CPU is idle and there are jobs to run
-      if (cpuJobs[i] === null && runningJobs.length > 0) {
-        cpuJobs[i] = runningJobs.shift()!;
+      if (cpuOverheadEndTimes[i] > currentTime) {
+        // This CPU is still in overhead time, can't assign new job
+        continue;
+      }
+      
+      // If CPU is idle or we have a better job, consider preemption
+      if (cpuJobs[i] === null || (runningJobs.length > 0 && 
+          runningJobs[0].remainingTime < cpuJobs[i]!.remainingTime)) {
         
-        // Record job start time if this is the first time it's running
-        if (jobStartTimes[cpuJobs[i]!.id] === null) {
-          jobStartTimes[cpuJobs[i]!.id] = currentTime;
+        // If there's a job running on this CPU, preempt it
+        if (cpuJobs[i] !== null) {
+          // Put current job back in running queue
+          runningJobs.push(cpuJobs[i]!);
+          
+          // Add switching overhead if specified
+          if (switchingOverhead > 0) {
+            cpuOverheadEndTimes[i] = currentTime + switchingOverhead;
+            cpuTimeSlots.push({
+              cpuId: i,
+              jobId: "OVERHEAD",
+              startTime: currentTime,
+              endTime: cpuOverheadEndTimes[i],
+              isOverhead: true
+            });
+          }
+          
+          // Free the CPU
+          cpuJobs[i] = null;
+          continue;
+        }
+        
+        // If there's a job waiting and CPU isn't in overhead time
+        if (runningJobs.length > 0 && cpuOverheadEndTimes[i] <= currentTime) {
+          cpuJobs[i] = runningJobs.shift()!;
+          
+          // Record job start time if this is the first time it's running
+          if (jobStartTimes[cpuJobs[i]!.id] === null) {
+            jobStartTimes[cpuJobs[i]!.id] = currentTime;
+          }
         }
       }
     }
     
-    // Find the time until the next event (job arrival or completion)
+    // Find the time until the next event (job arrival, completion, or overhead end)
     let nextEventTime = Infinity;
     
     // Check next job arrival
@@ -95,9 +174,16 @@ export const calculateSRTN = (jobs: Job[], cpuCount: number): ScheduleResult => 
       nextEventTime = remainingJobs[0].arrivalTime;
     }
     
+    // Check overhead end times
+    for (let i = 0; i < cpuCount; i++) {
+      if (cpuOverheadEndTimes[i] > currentTime) {
+        nextEventTime = Math.min(nextEventTime, cpuOverheadEndTimes[i]);
+      }
+    }
+    
     // Check job completions on CPUs
     for (let i = 0; i < cpuCount; i++) {
-      if (cpuJobs[i] !== null) {
+      if (cpuJobs[i] !== null && cpuOverheadEndTimes[i] <= currentTime) {
         // Time to complete the currently running job
         const timeToComplete = cpuJobs[i]!.remainingTime;
         nextEventTime = Math.min(nextEventTime, currentTime + timeToComplete);
@@ -114,7 +200,7 @@ export const calculateSRTN = (jobs: Job[], cpuCount: number): ScheduleResult => 
     
     // Process time until next event
     for (let i = 0; i < cpuCount; i++) {
-      if (cpuJobs[i] !== null) {
+      if (cpuJobs[i] !== null && cpuOverheadEndTimes[i] <= currentTime) {
         const job = cpuJobs[i]!;
         const timeSpent = nextEventTime - currentTime;
         
@@ -123,7 +209,7 @@ export const calculateSRTN = (jobs: Job[], cpuCount: number): ScheduleResult => 
           cpuId: i,
           jobId: job.id,
           startTime: currentTime,
-          endTime: nextEventTime,
+          endTime: nextEventTime
         });
         
         // Update job remaining time
@@ -143,10 +229,9 @@ export const calculateSRTN = (jobs: Job[], cpuCount: number): ScheduleResult => 
           // Free the CPU
           cpuJobs[i] = null;
         }
-        // If preemption occurs, put job back to running queue
+        // If preemption should occur
         else if (remainingJobs.length > 0 && remainingJobs[0].arrivalTime === nextEventTime) {
-          runningJobs.push(job);
-          cpuJobs[i] = null;
+          // Job will be added back to running queue at the next iteration
         }
       }
     }
@@ -158,23 +243,33 @@ export const calculateSRTN = (jobs: Job[], cpuCount: number): ScheduleResult => 
   // Calculate average turnaround time
   const averageTurnaroundTime = calculateAverageTurnaroundTime(jobResults);
   
+  // Calculate CPU utilization
+  const totalTime = cpuTimeSlots.length > 0 
+    ? Math.max(...cpuTimeSlots.map(slot => slot.endTime)) 
+    : 0;
+  const cpuUtilization = calculateCPUUtilization(cpuTimeSlots, totalTime, cpuCount);
+  
   return {
     jobResults,
     cpuTimeSlots,
+    queueSnapshots,
     averageTurnaroundTime,
+    cpuUtilization
   };
 };
 
 export const calculateRoundRobin = (
   jobs: Job[],
   cpuCount: number,
-  timeQuantum: number
+  timeQuantum: number,
+  switchingOverhead: number = 0
 ): ScheduleResult => {
   // Create deep copies of jobs to avoid modifying the original array
-  let remainingJobs = JSON.parse(JSON.stringify(jobs)) as Job[];
+  let remainingJobs = deepCopyJobs(jobs);
   let readyQueue: Job[] = [];
   let completedJobs: Job[] = [];
   let cpuTimeSlots: CPUTimeSlot[] = [];
+  let queueSnapshots: QueueSnapshot[] = [];
   let currentTime = 0;
   let jobResults: { [jobId: string]: { startTime: number; endTime: number; turnaroundTime: number } } = {};
   
@@ -184,12 +279,16 @@ export const calculateRoundRobin = (
     jobStartTimes[job.id] = null;
   });
   
-  // Initialize all CPUs as idle with remaining quantum
+  // Initialize CPU states
   const cpuJobs: (Job | null)[] = Array(cpuCount).fill(null);
   const cpuTimeRemaining: number[] = Array(cpuCount).fill(0);
+  const cpuOverheadEndTimes: number[] = Array(cpuCount).fill(0);
   
   // Sort jobs by arrival time initially
   remainingJobs.sort(sortByArrivalTime);
+  
+  // Take initial queue snapshot
+  queueSnapshots.push(takeQueueSnapshot(0, []));
   
   // Continue until all jobs are processed
   while (remainingJobs.length > 0 || readyQueue.length > 0 || cpuJobs.some(job => job !== null)) {
@@ -209,8 +308,18 @@ export const calculateRoundRobin = (
     );
     readyQueue.push(...newlyArrivedJobs);
     
+    // Take queue snapshot if jobs arrived
+    if (newlyArrivedJobs.length > 0 || readyQueue.length > 0) {
+      queueSnapshots.push(takeQueueSnapshot(currentTime, readyQueue));
+    }
+    
     // Assign jobs to available CPUs
     for (let i = 0; i < cpuCount; i++) {
+      // Skip if CPU is in overhead time
+      if (cpuOverheadEndTimes[i] > currentTime) {
+        continue;
+      }
+      
       if (cpuJobs[i] === null && readyQueue.length > 0) {
         cpuJobs[i] = readyQueue.shift()!;
         cpuTimeRemaining[i] = timeQuantum;
@@ -222,7 +331,7 @@ export const calculateRoundRobin = (
       }
     }
     
-    // Find the time until the next event (job arrival, quantum expiration, or job completion)
+    // Find the time until the next event (job arrival, quantum expiration, job completion, or overhead end)
     let nextEventTime = Infinity;
     
     // Check next job arrival
@@ -230,9 +339,16 @@ export const calculateRoundRobin = (
       nextEventTime = remainingJobs[0].arrivalTime;
     }
     
+    // Check overhead end times
+    for (let i = 0; i < cpuCount; i++) {
+      if (cpuOverheadEndTimes[i] > currentTime) {
+        nextEventTime = Math.min(nextEventTime, cpuOverheadEndTimes[i]);
+      }
+    }
+    
     // Check quantum expirations and job completions on CPUs
     for (let i = 0; i < cpuCount; i++) {
-      if (cpuJobs[i] !== null) {
+      if (cpuJobs[i] !== null && cpuOverheadEndTimes[i] <= currentTime) {
         // Time until quantum expires
         const timeToQuantumEnd = cpuTimeRemaining[i];
         
@@ -256,7 +372,7 @@ export const calculateRoundRobin = (
     
     // Process time until next event
     for (let i = 0; i < cpuCount; i++) {
-      if (cpuJobs[i] !== null) {
+      if (cpuJobs[i] !== null && cpuOverheadEndTimes[i] <= currentTime) {
         const job = cpuJobs[i]!;
         const timeSpent = nextEventTime - currentTime;
         
@@ -265,7 +381,7 @@ export const calculateRoundRobin = (
           cpuId: i,
           jobId: job.id,
           startTime: currentTime,
-          endTime: nextEventTime,
+          endTime: nextEventTime
         });
         
         // Update job remaining time and quantum
@@ -288,6 +404,19 @@ export const calculateRoundRobin = (
         }
         // Check if quantum expired
         else if (cpuTimeRemaining[i] <= 0.00001) {
+          // Add switching overhead if specified
+          if (switchingOverhead > 0) {
+            cpuOverheadEndTimes[i] = nextEventTime + switchingOverhead;
+            cpuTimeSlots.push({
+              cpuId: i,
+              jobId: "OVERHEAD",
+              startTime: nextEventTime,
+              endTime: cpuOverheadEndTimes[i],
+              isOverhead: true
+            });
+          }
+          
+          // Put job back in ready queue
           readyQueue.push(job);
           cpuJobs[i] = null;
         }
@@ -301,9 +430,17 @@ export const calculateRoundRobin = (
   // Calculate average turnaround time
   const averageTurnaroundTime = calculateAverageTurnaroundTime(jobResults);
   
+  // Calculate CPU utilization
+  const totalTime = cpuTimeSlots.length > 0 
+    ? Math.max(...cpuTimeSlots.map(slot => slot.endTime)) 
+    : 0;
+  const cpuUtilization = calculateCPUUtilization(cpuTimeSlots, totalTime, cpuCount);
+  
   return {
     jobResults,
     cpuTimeSlots,
+    queueSnapshots,
     averageTurnaroundTime,
+    cpuUtilization
   };
 };

@@ -32,7 +32,8 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs }: GanttChartProps) => {
   }, [cpuTimeSlots, cpuCount]);
 
   // Get job color by ID
-  const getJobColor = (jobId: string): string => {
+  const getJobColor = (jobId: string, isOverhead: boolean = false): string => {
+    if (isOverhead) return "bg-gray-400";
     const index = parseInt(jobId.replace("J", "")) - 1;
     return colors[index % colors.length];
   };
@@ -80,7 +81,7 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs }: GanttChartProps) => {
               return (
                 <div
                   key={index}
-                  className={`absolute h-full ${getJobColor(slot.jobId)} rounded-sm flex items-center justify-center`}
+                  className={`absolute h-full ${getJobColor(slot.jobId, slot.isOverhead)} rounded-sm flex items-center justify-center`}
                   style={{
                     left: `${left}%`,
                     width: `${width}%`,
@@ -88,7 +89,7 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs }: GanttChartProps) => {
                   }}
                 >
                   <span className="text-xs font-medium text-white truncate px-1">
-                    {slot.jobId}
+                    {slot.isOverhead ? "OH" : slot.jobId}
                   </span>
                 </div>
               );
@@ -107,6 +108,12 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs }: GanttChartProps) => {
             <span className="text-sm">{job.id}</span>
           </div>
         ))}
+        {cpuTimeSlots.some(slot => slot.isOverhead) && (
+          <div className="flex items-center">
+            <div className="w-4 h-4 mr-1 bg-gray-400 rounded"></div>
+            <span className="text-sm">Overhead</span>
+          </div>
+        )}
       </div>
     </div>
   );

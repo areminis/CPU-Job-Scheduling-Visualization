@@ -1,5 +1,4 @@
 
-import { useState } from "react";
 import JobScheduler from "@/components/JobScheduler";
 
 const Index = () => {
@@ -8,10 +7,10 @@ const Index = () => {
       <div className="container mx-auto px-4 py-8">
         <header className="text-center mb-8">
           <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
-            SRTN and Round Robin Job Scheduling Calculator
+            CPU Job Scheduling Visualization
           </h1>
           <p className="text-gray-600">
-            Visualize and compare CPU scheduling algorithms with precise timing
+            Interactive tool for SRTN and Round Robin scheduling algorithms with CPU switching overhead
           </p>
         </header>
         <main>

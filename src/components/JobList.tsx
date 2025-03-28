@@ -21,6 +21,7 @@ const JobList = ({ jobs, updateJob, scheduleResult }: JobListProps) => {
             <TableHead>Start Time</TableHead>
             <TableHead>End Time</TableHead>
             <TableHead>Turnaround Time</TableHead>
+            <TableHead>Remaining Time</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -61,6 +62,11 @@ const JobList = ({ jobs, updateJob, scheduleResult }: JobListProps) => {
                 {scheduleResult?.jobResults[job.id]?.turnaroundTime !== undefined 
                   ? scheduleResult.jobResults[job.id].turnaroundTime.toFixed(1)
                   : "-"}
+              </TableCell>
+              <TableCell>
+                {scheduleResult 
+                  ? "0.0" // Job is completed in the results
+                  : job.remainingTime.toFixed(1)}
               </TableCell>
             </TableRow>
           ))}

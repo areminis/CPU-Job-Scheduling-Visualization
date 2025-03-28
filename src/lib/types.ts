@@ -17,10 +17,18 @@ export interface CPUTimeSlot {
   jobId: string;
   startTime: number;
   endTime: number;
+  isOverhead?: boolean;
+}
+
+export interface QueueSnapshot {
+  time: number;
+  readyQueue: Job[];
 }
 
 export interface ScheduleResult {
   jobResults: { [jobId: string]: JobResult };
   cpuTimeSlots: CPUTimeSlot[];
+  queueSnapshots: QueueSnapshot[];
   averageTurnaroundTime: number;
+  cpuUtilization: number;
 }
