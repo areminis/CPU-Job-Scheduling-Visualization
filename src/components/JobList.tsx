@@ -33,8 +33,13 @@ const JobList = ({ jobs, updateJob, scheduleResult }: JobListProps) => {
                   type="number"
                   min="0"
                   step="0.1"
-                  value={job.arrivalTime || ""}
-                  onChange={(e) => updateJob(job.id, "arrivalTime", parseFloat(e.target.value) || 0)}
+                  value={job.arrivalTime !== undefined ? job.arrivalTime : ""}
+                  onChange={(e) => {
+                    const value = e.target.value === "" ? 0 : parseFloat(e.target.value);
+                    if (value >= 0 || e.target.value === "") {
+                      updateJob(job.id, "arrivalTime", value);
+                    }
+                  }}
                   className="w-full"
                   placeholder="0.0"
                 />

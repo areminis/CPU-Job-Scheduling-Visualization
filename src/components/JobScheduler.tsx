@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -45,7 +44,6 @@ const JobScheduler = () => {
     const updatedJobs = jobs.map((job) => {
       if (job.id === jobId) {
         const updatedJob = { ...job, [field]: value };
-        // Also update remaining time if burst time was updated
         if (field === "burstTime") {
           updatedJob.remainingTime = value;
         }
@@ -106,7 +104,6 @@ const JobScheduler = () => {
     if (!validateInputs()) return;
     
     setActiveAlgorithm("SRTN");
-    // Reset remaining time before calculation
     const jobsWithResetTime = jobs.map(job => ({
       ...job,
       remainingTime: job.burstTime
@@ -129,7 +126,6 @@ const JobScheduler = () => {
     if (!validateInputs()) return;
     
     setActiveAlgorithm("RR");
-    // Reset remaining time before calculation
     const jobsWithResetTime = jobs.map(job => ({
       ...job,
       remainingTime: job.burstTime
@@ -149,7 +145,6 @@ const JobScheduler = () => {
     });
   };
 
-  // Recalculate when inputs change if we have an active algorithm
   useEffect(() => {
     if (
       activeAlgorithm && 
