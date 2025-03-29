@@ -323,7 +323,7 @@ export const calculateRoundRobin = (
       // If CPU is empty and there are jobs in the ready queue, assign one
       if (cpuJobs[i] === null && readyQueue.length > 0) {
         cpuJobs[i] = readyQueue.shift()!;
-        cpuTimeRemaining[i] = timeQuantum;
+        cpuTimeRemaining[i] = Math.min(timeQuantum, cpuJobs[i]!.remainingTime);
         
         // Record job start time if this is the first time it's running
         if (jobStartTimes[cpuJobs[i]!.id] === null) {
@@ -350,16 +350,12 @@ export const calculateRoundRobin = (
     // Check quantum expirations and job completions on CPUs
     for (let i = 0; i < cpuCount; i++) {
       if (cpuJobs[i] !== null && cpuOverheadEndTimes[i] <= currentTime) {
-        // Time until quantum expires
-        const timeToQuantumEnd = cpuTimeRemaining[i];
+        // Time until quantum expires or job completes (whichever comes first)
+        const timeUntilEvent = cpuTimeRemaining[i];
         
-        // Time until job completes
-        const timeToComplete = cpuJobs[i]!.remainingTime;
-        
-        // Take the minimum of these two
-        const timeUntilEvent = Math.min(timeToQuantumEnd, timeToComplete);
-        
-        nextEventTime = Math.min(nextEventTime, currentTime + timeUntilEvent);
+        if (timeUntilEvent > 0) {
+          nextEventTime = Math.min(nextEventTime, currentTime + timeUntilEvent);
+        }
       }
     }
     
@@ -400,10 +396,11 @@ export const calculateRoundRobin = (
             turnaroundTime: nextEventTime - job.arrivalTime,
           };
           
-          // Here's the key change: Immediately start a new job if available
-          // instead of waiting for quantum to expire
+          // Free the CPU after job completes
+          cpuJobs[i] = null;
+          
+          // If there's a new job available to run, add switching overhead and assign it
           if (readyQueue.length > 0) {
-            // Add switching overhead if specified
             if (switchingOverhead > 0) {
               cpuOverheadEndTimes[i] = nextEventTime + switchingOverhead;
               cpuTimeSlots.push({
@@ -413,26 +410,18 @@ export const calculateRoundRobin = (
                 endTime: cpuOverheadEndTimes[i],
                 isOverhead: true
               });
-              
-              // Mark CPU as empty (it will get a new job after overhead)
-              cpuJobs[i] = null;
             } else {
-              // If no overhead, assign next job immediately
+              // If no overhead, assign new job immediately
               cpuJobs[i] = readyQueue.shift()!;
-              // Give the new job a full time quantum
-              cpuTimeRemaining[i] = timeQuantum;
+              cpuTimeRemaining[i] = Math.min(timeQuantum, cpuJobs[i]!.remainingTime);
               
-              // Record job start time if this is the first time it's running
               if (jobStartTimes[cpuJobs[i]!.id] === null) {
                 jobStartTimes[cpuJobs[i]!.id] = nextEventTime;
               }
             }
-          } else {
-            // No job in queue, free the CPU
-            cpuJobs[i] = null;
           }
         }
-        // Check if quantum expired
+        // Check if quantum expired (but job not completed)
         else if (cpuTimeRemaining[i] <= 0.00001) {
           // Add switching overhead if specified
           if (switchingOverhead > 0) {
@@ -448,7 +437,19 @@ export const calculateRoundRobin = (
           
           // Put job back in ready queue
           readyQueue.push(job);
+          
+          // Free the CPU
           cpuJobs[i] = null;
+          
+          // If no overhead and there are jobs in the queue, assign a new job immediately
+          if (switchingOverhead <= 0 && readyQueue.length > 0) {
+            cpuJobs[i] = readyQueue.shift()!;
+            cpuTimeRemaining[i] = Math.min(timeQuantum, cpuJobs[i]!.remainingTime);
+            
+            if (jobStartTimes[cpuJobs[i]!.id] === null) {
+              jobStartTimes[cpuJobs[i]!.id] = nextEventTime;
+            }
+          }
         }
       }
     }
