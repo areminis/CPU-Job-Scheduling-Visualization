@@ -31,6 +31,15 @@ const ScheduleResults = ({ scheduleResult, activeAlgorithm, cpuCount, jobs }: Sc
           </p>
         </div>
       </div>
+      
+      <div className="mb-4">
+        <p className="text-sm text-gray-600">
+          {activeAlgorithm === "RR" ? 
+            "Note: In Round Robin, when a job completes before using its full time quantum, the next job starts immediately." : 
+            "Note: In SRTN, jobs are scheduled based on remaining execution time."}
+        </p>
+      </div>
+      
       <GanttChart 
         cpuTimeSlots={scheduleResult.cpuTimeSlots} 
         cpuCount={Number(cpuCount)} 

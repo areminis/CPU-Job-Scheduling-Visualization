@@ -57,7 +57,7 @@ const JobList = ({ jobs, updateJob, scheduleResult }: JobListProps) => {
                     }
                   }}
                   className="w-full"
-                  placeholder="1.0"
+                  placeholder="Enter burst time"
                 />
               </TableCell>
               <TableCell>

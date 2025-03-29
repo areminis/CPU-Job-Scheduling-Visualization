@@ -21,7 +21,7 @@ const JobScheduler = () => {
     const newJobId = `J${jobs.length + 1}`;
     setJobs([
       ...jobs,
-      { id: newJobId, arrivalTime: 0, burstTime: 1, remainingTime: 1 },
+      { id: newJobId, arrivalTime: 0, burstTime: "", remainingTime: 0 } as unknown as Job,
     ]);
   };
 
