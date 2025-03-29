@@ -84,13 +84,8 @@ const JobScheduler = () => {
       return false;
     }
     
-    if (typeof switchingOverhead !== 'number' || switchingOverhead < 0) {
-      toast({
-        title: "Invalid switching overhead",
-        description: "Switching overhead cannot be negative",
-        variant: "destructive",
-      });
-      return false;
+    if (typeof switchingOverhead !== 'number' && switchingOverhead !== "") {
+      setSwitchingOverhead(0);
     }
     
     for (const job of jobs) {
@@ -120,7 +115,7 @@ const JobScheduler = () => {
     const result = calculateSRTN(
       jobsWithResetTime, 
       Number(cpuCount), 
-      Number(switchingOverhead)
+      Number(switchingOverhead) || 0
     );
     setScheduleResult(result);
     
@@ -144,7 +139,7 @@ const JobScheduler = () => {
       jobsWithResetTime, 
       Number(cpuCount), 
       Number(timeQuantum), 
-      Number(switchingOverhead)
+      Number(switchingOverhead) || 0
     );
     setScheduleResult(result);
     
@@ -162,7 +157,7 @@ const JobScheduler = () => {
       jobs.length > 0 && 
       typeof cpuCount === 'number' && 
       (activeAlgorithm !== "RR" || typeof timeQuantum === 'number') && 
-      typeof switchingOverhead === 'number'
+      (typeof switchingOverhead === 'number' || switchingOverhead === "")
     ) {
       if (activeAlgorithm === "SRTN") {
         calculateSRTNSchedule();
@@ -307,7 +302,7 @@ const JobScheduler = () => {
             </div>
             <GanttChart 
               cpuTimeSlots={scheduleResult.cpuTimeSlots} 
-              cpuCount={cpuCount} 
+              cpuCount={Number(cpuCount)} 
               jobs={jobs} 
             />
             

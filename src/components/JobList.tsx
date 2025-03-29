@@ -45,7 +45,12 @@ const JobList = ({ jobs, updateJob, scheduleResult }: JobListProps) => {
                   min="0.1"
                   step="0.1"
                   value={job.burstTime || ""}
-                  onChange={(e) => updateJob(job.id, "burstTime", parseFloat(e.target.value) || 0.1)}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value);
+                    if (value > 0) {
+                      updateJob(job.id, "burstTime", value);
+                    }
+                  }}
                   className="w-full"
                   placeholder="1.0"
                 />
