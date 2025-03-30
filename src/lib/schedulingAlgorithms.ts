@@ -1,4 +1,3 @@
-
 import { Job, ScheduleResult, CPUTimeSlot, QueueSnapshot } from "./types";
 
 // Helper function to calculate average turnaround time
@@ -228,10 +227,27 @@ export const calculateSRTN = (
           
           // Free the CPU
           cpuJobs[i] = null;
-        }
-        // If preemption should occur
-        else if (remainingJobs.length > 0 && remainingJobs[0].arrivalTime === nextEventTime) {
-          // Job will be added back to running queue at the next iteration
+          
+          // If there's a new job available to run, check if we should add switching overhead
+          if (runningJobs.length > 0) {
+            if (switchingOverhead > 0) {
+              cpuOverheadEndTimes[i] = nextEventTime + switchingOverhead;
+              cpuTimeSlots.push({
+                cpuId: i,
+                jobId: "OVERHEAD",
+                startTime: nextEventTime,
+                endTime: cpuOverheadEndTimes[i],
+                isOverhead: true
+              });
+            } else {
+              // If no overhead, assign new job immediately
+              cpuJobs[i] = runningJobs.shift()!;
+              
+              if (jobStartTimes[cpuJobs[i]!.id] === null) {
+                jobStartTimes[cpuJobs[i]!.id] = nextEventTime;
+              }
+            }
+          }
         }
       }
     }
