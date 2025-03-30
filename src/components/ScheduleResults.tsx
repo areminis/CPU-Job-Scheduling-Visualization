@@ -46,7 +46,7 @@ const ScheduleResults = ({ scheduleResult, activeAlgorithm, cpuCount, jobs }: Sc
         jobs={jobs} 
       />
       
-      <h3 className="text-lg font-semibold mt-6 mb-3">Job Queue Snapshots</h3>
+      <h3 className="text-lg font-semibold mt-6 mb-3">Job Queue Timeline</h3>
       <JobQueue 
         queueSnapshots={scheduleResult.queueSnapshots}
         jobs={jobs}
