@@ -120,47 +120,51 @@ export const calculateSRTN = (
       queueSnapshots.push(takeQueueSnapshot(currentTime, runningJobs));
     }
     
-    // Check if any CPU is in overhead time
+    // Check for idle CPUs and assign jobs if available
     for (let i = 0; i < cpuCount; i++) {
+      // Skip if CPU is in overhead time
       if (cpuOverheadEndTimes[i] > currentTime) {
-        // This CPU is still in overhead time, can't assign new job
         continue;
       }
       
-      // If CPU is idle or we have a better job, consider preemption
-      if (cpuJobs[i] === null || (runningJobs.length > 0 && 
-          runningJobs[0].remainingTime < cpuJobs[i]!.remainingTime)) {
+      // If CPU is idle and there are jobs in the queue, assign one
+      if (cpuJobs[i] === null && runningJobs.length > 0) {
+        cpuJobs[i] = runningJobs.shift()!;
         
-        // If there's a job running on this CPU, preempt it
-        if (cpuJobs[i] !== null) {
-          // Put current job back in running queue
-          runningJobs.push(cpuJobs[i]!);
-          
-          // Add switching overhead if specified
-          if (switchingOverhead > 0) {
-            cpuOverheadEndTimes[i] = currentTime + switchingOverhead;
-            cpuTimeSlots.push({
-              cpuId: i,
-              jobId: "OVERHEAD",
-              startTime: currentTime,
-              endTime: cpuOverheadEndTimes[i],
-              isOverhead: true
-            });
-          }
+        // Record job start time if this is the first time it's running
+        if (jobStartTimes[cpuJobs[i]!.id] === null) {
+          jobStartTimes[cpuJobs[i]!.id] = currentTime;
+        }
+      }
+      // If CPU has a job, check if we should preempt it with a shorter job
+      else if (cpuJobs[i] !== null && runningJobs.length > 0 && 
+          runningJobs[0].remainingTime < cpuJobs[i]!.remainingTime) {
+        
+        // Put current job back in running queue
+        runningJobs.push(cpuJobs[i]!);
+        
+        // Add switching overhead if specified
+        if (switchingOverhead > 0) {
+          cpuOverheadEndTimes[i] = currentTime + switchingOverhead;
+          cpuTimeSlots.push({
+            cpuId: i,
+            jobId: "OVERHEAD",
+            startTime: currentTime,
+            endTime: cpuOverheadEndTimes[i],
+            isOverhead: true
+          });
           
           // Free the CPU
           cpuJobs[i] = null;
           continue;
         }
         
-        // If there's a job waiting and CPU isn't in overhead time
-        if (runningJobs.length > 0 && cpuOverheadEndTimes[i] <= currentTime) {
-          cpuJobs[i] = runningJobs.shift()!;
-          
-          // Record job start time if this is the first time it's running
-          if (jobStartTimes[cpuJobs[i]!.id] === null) {
-            jobStartTimes[cpuJobs[i]!.id] = currentTime;
-          }
+        // Assign the new job with shorter remaining time
+        cpuJobs[i] = runningJobs.shift()!;
+        
+        // Record job start time if this is the first time it's running
+        if (jobStartTimes[cpuJobs[i]!.id] === null) {
+          jobStartTimes[cpuJobs[i]!.id] = currentTime;
         }
       }
     }
@@ -251,6 +255,9 @@ export const calculateSRTN = (
         }
       }
     }
+    
+    // After the event, re-sort the running queue as priorities may have changed
+    runningJobs.sort(sortByRemainingTime);
     
     // Advance time to next event
     currentTime = nextEventTime;

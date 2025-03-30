@@ -36,7 +36,7 @@ const ScheduleResults = ({ scheduleResult, activeAlgorithm, cpuCount, jobs }: Sc
         <p className="text-sm text-gray-600">
           {activeAlgorithm === "RR" ? 
             "Note: In Round Robin, jobs execute for their full time quantum unless they complete. When a job completes, the next job starts immediately." : 
-            "Note: In SRTN, jobs are scheduled based on remaining execution time. When a job completes, the next job starts immediately if available."}
+            "Note: In SRTN, jobs are scheduled based on remaining execution time. CPUs will always execute the available job with the shortest remaining time. When a job completes, the next shortest job starts immediately."}
         </p>
       </div>
       
