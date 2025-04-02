@@ -4,10 +4,10 @@ import React from "react";
 interface AlgorithmExplanationProps {
   activeAlgorithm: "SRTN" | "RR" | "";
   timeQuantum: number | "";
-  switchingOverhead: number | "";
+  scheduleMode: "quantum" | "endTime";
 }
 
-const AlgorithmExplanation = ({ activeAlgorithm, timeQuantum, switchingOverhead }: AlgorithmExplanationProps) => {
+const AlgorithmExplanation = ({ activeAlgorithm, timeQuantum, scheduleMode }: AlgorithmExplanationProps) => {
   return (
     <div className="bg-white rounded-lg p-4 shadow-md">
       <h2 className="text-xl font-semibold mb-2">Algorithm Explanation</h2>
@@ -20,9 +20,12 @@ const AlgorithmExplanation = ({ activeAlgorithm, timeQuantum, switchingOverhead 
             process with the burst time of the newly arrived process.
           </p>
           <p className="text-sm text-gray-700 mt-2">
-            <strong>CPU Switching Overhead:</strong> {switchingOverhead ? 
-              `${Number(switchingOverhead).toFixed(1)} time units delay when switching jobs` : 
-              "No switching overhead"}
+            <strong>Current Mode:</strong> {scheduleMode === "quantum" ? 
+              "Reschedule by quantum - Jobs are scheduled at fixed time quantum boundaries" : 
+              "Reschedule by end time - Jobs are scheduled immediately when another job completes"}
+          </p>
+          <p className="text-sm text-gray-700 mt-2">
+            <strong>Time Quantum:</strong> {timeQuantum ? Number(timeQuantum).toFixed(1) : "--"} time units
           </p>
         </div>
       ) : activeAlgorithm === "RR" ? (
@@ -31,15 +34,14 @@ const AlgorithmExplanation = ({ activeAlgorithm, timeQuantum, switchingOverhead 
             <strong>Round Robin (RR)</strong> is a CPU scheduling algorithm where each process is 
             assigned a fixed time slot in a cyclic way. It is designed especially for time-sharing 
             systems. The scheduler assigns a fixed time unit per process, and cycles through them.
-            When a job completes before using its full time quantum, the next job starts immediately.
+          </p>
+          <p className="text-sm text-gray-700 mt-2">
+            <strong>Current Mode:</strong> {scheduleMode === "quantum" ? 
+              "Reschedule by quantum - Jobs are scheduled at fixed time quantum boundaries" : 
+              "Reschedule by end time - Jobs are scheduled immediately when another job completes"}
           </p>
           <p className="text-sm text-gray-700 mt-2">
             <strong>Time Quantum:</strong> {timeQuantum ? Number(timeQuantum).toFixed(1) : "--"} time units
-          </p>
-          <p className="text-sm text-gray-700">
-            <strong>CPU Switching Overhead:</strong> {switchingOverhead ? 
-              `${Number(switchingOverhead).toFixed(1)} time units delay when switching jobs` : 
-              "No switching overhead"}
           </p>
         </div>
       ) : (
