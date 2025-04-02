@@ -32,8 +32,8 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs }: GanttChartProps) => {
   }, [cpuTimeSlots, cpuCount]);
 
   // Get job color by ID
-  const getJobColor = (jobId: string, isOverhead: boolean = false): string => {
-    if (isOverhead) return "bg-gray-400";
+  const getJobColor = (jobId: string, isIdle: boolean = false): string => {
+    if (isIdle) return "bg-gray-200"; // Light gray for idle slots
     const index = parseInt(jobId.replace("J", "")) - 1;
     return colors[index % colors.length];
   };
@@ -77,19 +77,21 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs }: GanttChartProps) => {
             {cpuSlots[cpuId]?.map((slot, index) => {
               const width = ((slot.endTime - slot.startTime) / endTime) * 100;
               const left = (slot.startTime / endTime) * 100;
+              const isIdle = slot.isIdle === true;
               
               return (
                 <div
                   key={index}
-                  className={`absolute h-full ${getJobColor(slot.jobId, slot.isOverhead)} rounded-sm flex items-center justify-center`}
+                  className={`absolute h-full ${getJobColor(slot.jobId, isIdle)} rounded-sm flex items-center justify-center`}
                   style={{
                     left: `${left}%`,
                     width: `${width}%`,
-                    minWidth: "24px"
+                    minWidth: "24px",
+                    border: isIdle ? "1px dashed #666" : "none"
                   }}
                 >
-                  <span className="text-xs font-medium text-white truncate px-1">
-                    {slot.isOverhead ? "OH" : slot.jobId}
+                  <span className={`text-xs font-medium ${isIdle ? "text-gray-600" : "text-white"} truncate px-1`}>
+                    {isIdle ? "Idle" : slot.jobId}
                   </span>
                 </div>
               );
@@ -108,10 +110,10 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs }: GanttChartProps) => {
             <span className="text-sm">{job.id}</span>
           </div>
         ))}
-        {cpuTimeSlots.some(slot => slot.isOverhead) && (
+        {cpuTimeSlots.some(slot => slot.isIdle) && (
           <div className="flex items-center">
-            <div className="w-4 h-4 mr-1 bg-gray-400 rounded"></div>
-            <span className="text-sm">Overhead</span>
+            <div className="w-4 h-4 mr-1 bg-gray-200 border border-gray-400 rounded"></div>
+            <span className="text-sm">Idle Time</span>
           </div>
         )}
       </div>

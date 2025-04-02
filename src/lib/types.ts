@@ -17,7 +17,7 @@ export interface CPUTimeSlot {
   jobId: string;
   startTime: number;
   endTime: number;
-  isOverhead?: boolean;
+  isIdle?: boolean;
 }
 
 export interface QueueSnapshot {

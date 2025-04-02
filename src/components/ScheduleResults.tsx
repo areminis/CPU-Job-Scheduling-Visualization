@@ -44,11 +44,11 @@ const ScheduleResults = ({
         <p className="text-sm text-gray-600">
           {activeAlgorithm === "RR" ? 
             scheduleMode === "quantum" ?
-              "Note: In Round Robin (Quantum Based), jobs execute for their full time quantum unless they complete. If a job completes before using its full quantum, the CPU remains idle until the next quantum cycle begins." : 
+              "Note: In Round Robin (Quantum Based), jobs execute for their full time quantum unless they complete. If a job completes before using its full quantum, the CPU remains idle until the next quantum cycle begins. Jobs are only rescheduled at the end of each quantum cycle." : 
               "Note: In Round Robin (End Time Based), when a job completes or uses its full quantum, it's removed from CPU and placed at the end of the queue. New jobs are added to the queue, and the next job starts immediately without waiting for the next quantum cycle."
             : 
             scheduleMode === "quantum" ?
-              "Note: In SRTN (Quantum Based), jobs are scheduled based on shortest remaining time at quantum boundaries. If a job completes before its quantum ends, the CPU remains idle until the next quantum cycle." :
+              "Note: In SRTN (Quantum Based), jobs are scheduled based on shortest remaining time at quantum boundaries. If a job completes before its quantum ends, the CPU remains idle until the next quantum cycle begins. Jobs are only rescheduled at the end of each quantum cycle." :
               "Note: In SRTN (End Time Based), when a job completes, the next job with the shortest remaining time starts immediately. If multiple CPUs can run a job simultaneously, CPU order determines priority."
           }
         </p>
