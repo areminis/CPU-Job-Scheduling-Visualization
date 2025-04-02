@@ -1,3 +1,4 @@
+
 import { Job, ScheduleResult, CPUTimeSlot, QueueSnapshot } from "./types";
 
 // Helper function to calculate average turnaround time
@@ -66,8 +67,8 @@ const takeQueueSnapshot = (
 
 export const calculateSRTN = (
   jobs: Job[], 
-  cpuCount: number, 
-  switchingOverhead: number = 0
+  cpuCount: number,
+  scheduleMode: "quantum" | "endTime" = "quantum"
 ): ScheduleResult => {
   // Create deep copies of jobs to avoid modifying the original array
   let remainingJobs = deepCopyJobs(jobs);
@@ -86,7 +87,6 @@ export const calculateSRTN = (
   
   // Initialize CPU states
   const cpuJobs: (Job | null)[] = Array(cpuCount).fill(null);
-  const cpuOverheadEndTimes: number[] = Array(cpuCount).fill(0);
   
   // Sort jobs by arrival time initially
   remainingJobs.sort(sortByArrivalTime);
@@ -122,11 +122,6 @@ export const calculateSRTN = (
     
     // Check for idle CPUs and assign jobs if available
     for (let i = 0; i < cpuCount; i++) {
-      // Skip if CPU is in overhead time
-      if (cpuOverheadEndTimes[i] > currentTime) {
-        continue;
-      }
-      
       // If CPU is idle and there are jobs in the queue, assign one
       if (cpuJobs[i] === null && runningJobs.length > 0) {
         cpuJobs[i] = runningJobs.shift()!;
@@ -136,28 +131,12 @@ export const calculateSRTN = (
           jobStartTimes[cpuJobs[i]!.id] = currentTime;
         }
       }
-      // If CPU has a job, check if we should preempt it with a shorter job
-      else if (cpuJobs[i] !== null && runningJobs.length > 0 && 
+      // For quantum-based scheduling, check if we should preempt with a shorter job
+      else if (scheduleMode === "quantum" && cpuJobs[i] !== null && runningJobs.length > 0 && 
           runningJobs[0].remainingTime < cpuJobs[i]!.remainingTime) {
         
         // Put current job back in running queue
         runningJobs.push(cpuJobs[i]!);
-        
-        // Add switching overhead if specified
-        if (switchingOverhead > 0) {
-          cpuOverheadEndTimes[i] = currentTime + switchingOverhead;
-          cpuTimeSlots.push({
-            cpuId: i,
-            jobId: "OVERHEAD",
-            startTime: currentTime,
-            endTime: cpuOverheadEndTimes[i],
-            isOverhead: true
-          });
-          
-          // Free the CPU
-          cpuJobs[i] = null;
-          continue;
-        }
         
         // Assign the new job with shorter remaining time
         cpuJobs[i] = runningJobs.shift()!;
@@ -169,7 +148,54 @@ export const calculateSRTN = (
       }
     }
     
-    // Find the time until the next event (job arrival, completion, or overhead end)
+    // For end-time based SRTN scheduling, recheck job assignments based on CPU priority
+    if (scheduleMode === "endTime") {
+      // Collect all jobs (CPU assigned and in queue)
+      let allJobs: Job[] = [];
+      let cpuIndices: number[] = [];
+      
+      // Add jobs from CPUs
+      for (let i = 0; i < cpuCount; i++) {
+        if (cpuJobs[i] !== null) {
+          allJobs.push(cpuJobs[i]!);
+          cpuIndices.push(i);
+        }
+      }
+      
+      // Add jobs from queue
+      allJobs = [...allJobs, ...runningJobs];
+      
+      // Sort all jobs by remaining time
+      allJobs.sort(sortByRemainingTime);
+      
+      // Clear running queue and CPUs
+      runningJobs = [];
+      for (let i = 0; i < cpuCount; i++) {
+        cpuJobs[i] = null;
+      }
+      
+      // Reassign jobs giving priority to CPU order
+      for (let i = 0; i < Math.min(cpuCount, allJobs.length); i++) {
+        cpuJobs[i] = allJobs[i];
+        
+        // Record job start time if this is the first time it's running
+        if (jobStartTimes[cpuJobs[i]!.id] === null) {
+          jobStartTimes[cpuJobs[i]!.id] = currentTime;
+        }
+      }
+      
+      // Push remaining jobs to running queue
+      if (allJobs.length > cpuCount) {
+        runningJobs = allJobs.slice(cpuCount);
+      }
+      
+      // Take a new queue snapshot after reassignment
+      if (runningJobs.length > 0) {
+        queueSnapshots.push(takeQueueSnapshot(currentTime, runningJobs));
+      }
+    }
+    
+    // Find the time until the next event (job arrival, completion)
     let nextEventTime = Infinity;
     
     // Check next job arrival
@@ -177,16 +203,9 @@ export const calculateSRTN = (
       nextEventTime = remainingJobs[0].arrivalTime;
     }
     
-    // Check overhead end times
-    for (let i = 0; i < cpuCount; i++) {
-      if (cpuOverheadEndTimes[i] > currentTime) {
-        nextEventTime = Math.min(nextEventTime, cpuOverheadEndTimes[i]);
-      }
-    }
-    
     // Check job completions on CPUs
     for (let i = 0; i < cpuCount; i++) {
-      if (cpuJobs[i] !== null && cpuOverheadEndTimes[i] <= currentTime) {
+      if (cpuJobs[i] !== null) {
         // Time to complete the currently running job
         const timeToComplete = cpuJobs[i]!.remainingTime;
         nextEventTime = Math.min(nextEventTime, currentTime + timeToComplete);
@@ -203,7 +222,7 @@ export const calculateSRTN = (
     
     // Process time until next event
     for (let i = 0; i < cpuCount; i++) {
-      if (cpuJobs[i] !== null && cpuOverheadEndTimes[i] <= currentTime) {
+      if (cpuJobs[i] !== null) {
         const job = cpuJobs[i]!;
         const timeSpent = nextEventTime - currentTime;
         
@@ -232,24 +251,13 @@ export const calculateSRTN = (
           // Free the CPU
           cpuJobs[i] = null;
           
-          // If there's a new job available to run, check if we should add switching overhead
+          // If there's a new job available to run, assign it immediately
           if (runningJobs.length > 0) {
-            if (switchingOverhead > 0) {
-              cpuOverheadEndTimes[i] = nextEventTime + switchingOverhead;
-              cpuTimeSlots.push({
-                cpuId: i,
-                jobId: "OVERHEAD",
-                startTime: nextEventTime,
-                endTime: cpuOverheadEndTimes[i],
-                isOverhead: true
-              });
-            } else {
-              // If no overhead, assign new job immediately
-              cpuJobs[i] = runningJobs.shift()!;
-              
-              if (jobStartTimes[cpuJobs[i]!.id] === null) {
-                jobStartTimes[cpuJobs[i]!.id] = nextEventTime;
-              }
+            // Assign new job immediately
+            cpuJobs[i] = runningJobs.shift()!;
+            
+            if (jobStartTimes[cpuJobs[i]!.id] === null) {
+              jobStartTimes[cpuJobs[i]!.id] = nextEventTime;
             }
           }
         }
@@ -285,7 +293,7 @@ export const calculateRoundRobin = (
   jobs: Job[],
   cpuCount: number,
   timeQuantum: number,
-  switchingOverhead: number = 0
+  scheduleMode: "quantum" | "endTime" = "quantum"
 ): ScheduleResult => {
   // Create deep copies of jobs to avoid modifying the original array
   let remainingJobs = deepCopyJobs(jobs);
@@ -305,7 +313,6 @@ export const calculateRoundRobin = (
   // Initialize CPU states
   const cpuJobs: (Job | null)[] = Array(cpuCount).fill(null);
   const cpuTimeRemaining: number[] = Array(cpuCount).fill(0);
-  const cpuOverheadEndTimes: number[] = Array(cpuCount).fill(0);
   
   // Sort jobs by arrival time initially
   remainingJobs.sort(sortByArrivalTime);
@@ -329,6 +336,9 @@ export const calculateRoundRobin = (
     remainingJobs = remainingJobs.filter(
       (job) => job.arrivalTime > currentTime
     );
+    
+    // For end-time based scheduling, new jobs are added at the end
+    // For quantum-based scheduling, maintain FIFO order
     readyQueue.push(...newlyArrivedJobs);
     
     // Take queue snapshot if jobs arrived or queue changed
@@ -338,11 +348,6 @@ export const calculateRoundRobin = (
     
     // Assign jobs to available CPUs
     for (let i = 0; i < cpuCount; i++) {
-      // Skip if CPU is in overhead time
-      if (cpuOverheadEndTimes[i] > currentTime) {
-        continue;
-      }
-      
       // If CPU is empty and there are jobs in the ready queue, assign one
       if (cpuJobs[i] === null && readyQueue.length > 0) {
         cpuJobs[i] = readyQueue.shift()!;
@@ -355,7 +360,7 @@ export const calculateRoundRobin = (
       }
     }
     
-    // Find the time until the next event (job arrival, quantum expiration, job completion, or overhead end)
+    // Find the time until the next event (job arrival, quantum expiration, job completion)
     let nextEventTime = Infinity;
     
     // Check next job arrival
@@ -363,16 +368,9 @@ export const calculateRoundRobin = (
       nextEventTime = remainingJobs[0].arrivalTime;
     }
     
-    // Check overhead end times
-    for (let i = 0; i < cpuCount; i++) {
-      if (cpuOverheadEndTimes[i] > currentTime) {
-        nextEventTime = Math.min(nextEventTime, cpuOverheadEndTimes[i]);
-      }
-    }
-    
     // Check quantum expirations and job completions on CPUs
     for (let i = 0; i < cpuCount; i++) {
-      if (cpuJobs[i] !== null && cpuOverheadEndTimes[i] <= currentTime) {
+      if (cpuJobs[i] !== null) {
         // Time until quantum expires or job completes (whichever comes first)
         const timeUntilEvent = cpuTimeRemaining[i];
         
@@ -392,7 +390,7 @@ export const calculateRoundRobin = (
     
     // Process time until next event
     for (let i = 0; i < cpuCount; i++) {
-      if (cpuJobs[i] !== null && cpuOverheadEndTimes[i] <= currentTime) {
+      if (cpuJobs[i] !== null) {
         const job = cpuJobs[i]!;
         const timeSpent = nextEventTime - currentTime;
         
@@ -422,50 +420,58 @@ export const calculateRoundRobin = (
           // Free the CPU after job completes
           cpuJobs[i] = null;
           
-          // If there's a new job available to run, add switching overhead and assign it
+          // If there's a new job available to run, assign it
           if (readyQueue.length > 0) {
-            if (switchingOverhead > 0) {
-              cpuOverheadEndTimes[i] = nextEventTime + switchingOverhead;
-              cpuTimeSlots.push({
-                cpuId: i,
-                jobId: "OVERHEAD",
-                startTime: nextEventTime,
-                endTime: cpuOverheadEndTimes[i],
-                isOverhead: true
-              });
-            } else {
-              // If no overhead, assign new job immediately
-              cpuJobs[i] = readyQueue.shift()!;
-              cpuTimeRemaining[i] = Math.min(timeQuantum, cpuJobs[i]!.remainingTime);
-              
-              if (jobStartTimes[cpuJobs[i]!.id] === null) {
-                jobStartTimes[cpuJobs[i]!.id] = nextEventTime;
-              }
+            // Assign new job immediately
+            cpuJobs[i] = readyQueue.shift()!;
+            cpuTimeRemaining[i] = Math.min(timeQuantum, cpuJobs[i]!.remainingTime);
+            
+            if (jobStartTimes[cpuJobs[i]!.id] === null) {
+              jobStartTimes[cpuJobs[i]!.id] = nextEventTime;
             }
           }
         }
         // Check if quantum expired (but job not completed)
         else if (cpuTimeRemaining[i] <= 0.00001) {
-          // Add switching overhead if specified
-          if (switchingOverhead > 0) {
-            cpuOverheadEndTimes[i] = nextEventTime + switchingOverhead;
-            cpuTimeSlots.push({
-              cpuId: i,
-              jobId: "OVERHEAD",
-              startTime: nextEventTime,
-              endTime: cpuOverheadEndTimes[i],
-              isOverhead: true
-            });
+          if (scheduleMode === "quantum") {
+            // Put job back in ready queue (at the end)
+            readyQueue.push(job);
+          } else {
+            // For "endTime" mode:
+            // Store the current job to be put back later
+            const currentJob = job;
+            
+            // Free the CPU
+            cpuJobs[i] = null;
+            
+            // 1. Store currently running jobs
+            const runningJobs: Job[] = [];
+            for (let j = 0; j < cpuCount; j++) {
+              if (cpuJobs[j] !== null) {
+                runningJobs.push(cpuJobs[j]!);
+                cpuJobs[j] = null;
+              }
+            }
+            
+            // 2. Add newly arrived jobs to the queue (they're already in the queue from above)
+            
+            // 3. Add current job back to the queue
+            readyQueue.push(currentJob);
+            
+            // 4. Re-add running jobs to the queue (except the current one)
+            for (const runningJob of runningJobs) {
+              readyQueue.push(runningJob);
+            }
+            
+            // Take a snapshot after this queue reorganization
+            queueSnapshots.push(takeQueueSnapshot(nextEventTime, readyQueue));
           }
-          
-          // Put job back in ready queue
-          readyQueue.push(job);
           
           // Free the CPU
           cpuJobs[i] = null;
           
-          // If no overhead and there are jobs in the queue, assign a new job immediately
-          if (switchingOverhead <= 0 && readyQueue.length > 0) {
+          // If there are jobs in the queue, assign a new job immediately
+          if (readyQueue.length > 0) {
             cpuJobs[i] = readyQueue.shift()!;
             cpuTimeRemaining[i] = Math.min(timeQuantum, cpuJobs[i]!.remainingTime);
             

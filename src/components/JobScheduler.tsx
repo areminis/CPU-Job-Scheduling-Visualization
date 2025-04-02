@@ -12,10 +12,10 @@ const JobScheduler = () => {
   const { toast } = useToast();
   const [cpuCount, setCpuCount] = useState<number | "">("");
   const [timeQuantum, setTimeQuantum] = useState<number | "">("");
-  const [switchingOverhead, setSwitchingOverhead] = useState<number | "">("");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null);
   const [activeAlgorithm, setActiveAlgorithm] = useState<"SRTN" | "RR" | "">("");
+  const [scheduleMode, setScheduleMode] = useState<"quantum" | "endTime">("quantum");
 
   const addJob = () => {
     const newJobId = `J${jobs.length + 1}`;
@@ -81,10 +81,6 @@ const JobScheduler = () => {
       return false;
     }
     
-    if (typeof switchingOverhead !== 'number' && switchingOverhead !== "") {
-      setSwitchingOverhead(0);
-    }
-    
     for (const job of jobs) {
       if (job.arrivalTime < 0 || job.burstTime <= 0) {
         toast({
@@ -110,8 +106,8 @@ const JobScheduler = () => {
     
     const result = calculateSRTN(
       jobsWithResetTime, 
-      Number(cpuCount), 
-      Number(switchingOverhead) || 0
+      Number(cpuCount),
+      scheduleMode
     );
     setScheduleResult(result);
     
@@ -133,8 +129,8 @@ const JobScheduler = () => {
     const result = calculateRoundRobin(
       jobsWithResetTime, 
       Number(cpuCount), 
-      Number(timeQuantum), 
-      Number(switchingOverhead) || 0
+      Number(timeQuantum),
+      scheduleMode
     );
     setScheduleResult(result);
     
@@ -150,8 +146,7 @@ const JobScheduler = () => {
       scheduleResult && 
       jobs.length > 0 && 
       typeof cpuCount === 'number' && 
-      (activeAlgorithm !== "RR" || typeof timeQuantum === 'number') && 
-      (typeof switchingOverhead === 'number' || switchingOverhead === "")
+      (activeAlgorithm !== "RR" || typeof timeQuantum === 'number')
     ) {
       if (activeAlgorithm === "SRTN") {
         calculateSRTNSchedule();
@@ -159,7 +154,7 @@ const JobScheduler = () => {
         calculateRoundRobinSchedule();
       }
     }
-  }, [cpuCount, timeQuantum, switchingOverhead]);
+  }, [cpuCount, timeQuantum]);
 
   return (
     <div className="space-y-8">
@@ -167,20 +162,20 @@ const JobScheduler = () => {
         <JobControls
           cpuCount={cpuCount}
           timeQuantum={timeQuantum}
-          switchingOverhead={switchingOverhead}
           setCpuCount={setCpuCount}
           setTimeQuantum={setTimeQuantum}
-          setSwitchingOverhead={setSwitchingOverhead}
           addJob={addJob}
           removeLastJob={removeLastJob}
           calculateSRTNSchedule={calculateSRTNSchedule}
           calculateRoundRobinSchedule={calculateRoundRobinSchedule}
+          scheduleMode={scheduleMode}
+          setScheduleMode={setScheduleMode}
         />
         
         <AlgorithmExplanation 
           activeAlgorithm={activeAlgorithm}
           timeQuantum={timeQuantum}
-          switchingOverhead={switchingOverhead}
+          scheduleMode={scheduleMode}
         />
       </div>
 
@@ -194,6 +189,7 @@ const JobScheduler = () => {
           activeAlgorithm={activeAlgorithm}
           cpuCount={Number(cpuCount)}
           jobs={jobs}
+          scheduleMode={scheduleMode}
         />
       )}
     </div>

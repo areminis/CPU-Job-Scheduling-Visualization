@@ -9,15 +9,23 @@ interface ScheduleResultsProps {
   activeAlgorithm: "SRTN" | "RR" | "";
   cpuCount: number;
   jobs: Job[];
+  scheduleMode: "quantum" | "endTime";
 }
 
-const ScheduleResults = ({ scheduleResult, activeAlgorithm, cpuCount, jobs }: ScheduleResultsProps) => {
+const ScheduleResults = ({ 
+  scheduleResult, 
+  activeAlgorithm, 
+  cpuCount, 
+  jobs,
+  scheduleMode 
+}: ScheduleResultsProps) => {
   if (!scheduleResult) return null;
 
   return (
     <div className="bg-white rounded-lg p-4 shadow-md">
       <h2 className="text-xl font-semibold mb-4">
-        {activeAlgorithm === "SRTN" ? "SRTN" : "Round Robin"} Schedule Results
+        {activeAlgorithm === "SRTN" ? "SRTN" : "Round Robin"} Schedule Results 
+        ({scheduleMode === "quantum" ? "Quantum Based" : "End Time Based"})
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
@@ -35,8 +43,14 @@ const ScheduleResults = ({ scheduleResult, activeAlgorithm, cpuCount, jobs }: Sc
       <div className="mb-4">
         <p className="text-sm text-gray-600">
           {activeAlgorithm === "RR" ? 
-            "Note: In Round Robin, jobs execute for their full time quantum unless they complete. When a job completes, the next job starts immediately." : 
-            "Note: In SRTN, jobs are scheduled based on remaining execution time. CPUs will always execute the available job with the shortest remaining time. When a job completes, the next shortest job starts immediately."}
+            scheduleMode === "quantum" ?
+              "Note: In Round Robin (Quantum Based), jobs execute for their full time quantum unless they complete. When a job completes, the next job starts immediately in CPU priority order." : 
+              "Note: In Round Robin (End Time Based), current jobs are removed from the queue after execution, new jobs are appended, and current jobs are put back in the queue in CPU priority order."
+            : 
+            scheduleMode === "quantum" ?
+              "Note: In SRTN (Quantum Based), jobs are scheduled based on remaining execution time. CPUs execute available jobs with the shortest remaining time. When a job completes, the next shortest job starts immediately." :
+              "Note: In SRTN (End Time Based), jobs are prioritized by shortest remaining time, with CPU order priority when multiple CPUs can execute a job simultaneously."
+          }
         </p>
       </div>
       
