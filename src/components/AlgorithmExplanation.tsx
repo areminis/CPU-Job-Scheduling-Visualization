@@ -21,8 +21,8 @@ const AlgorithmExplanation = ({ activeAlgorithm, timeQuantum, scheduleMode }: Al
           </p>
           <p className="text-sm text-gray-700 mt-2">
             <strong>Current Mode:</strong> {scheduleMode === "quantum" ? 
-              "Reschedule by quantum - Jobs are scheduled at fixed time quantum boundaries" : 
-              "Reschedule by end time - Jobs are scheduled immediately when another job completes"}
+              "Reschedule by quantum - Jobs are scheduled at fixed time quantum boundaries and if a job completes before the quantum ends, CPU remains idle until the next quantum cycle." : 
+              "Reschedule by end time - Jobs are scheduled immediately when another job completes and CPU priority order is used when multiple CPUs can execute a job."}
           </p>
           <p className="text-sm text-gray-700 mt-2">
             <strong>Time Quantum:</strong> {timeQuantum ? Number(timeQuantum).toFixed(1) : "--"} time units
@@ -37,8 +37,8 @@ const AlgorithmExplanation = ({ activeAlgorithm, timeQuantum, scheduleMode }: Al
           </p>
           <p className="text-sm text-gray-700 mt-2">
             <strong>Current Mode:</strong> {scheduleMode === "quantum" ? 
-              "Reschedule by quantum - Jobs are scheduled at fixed time quantum boundaries" : 
-              "Reschedule by end time - Jobs are scheduled immediately when another job completes"}
+              "Reschedule by quantum - Jobs are scheduled at fixed time quantum boundaries and if a job completes before the quantum ends, CPU remains idle until the next quantum cycle." : 
+              "Reschedule by end time - When a job completes or uses its full quantum, it's placed at the end of the queue and the next job starts immediately."}
           </p>
           <p className="text-sm text-gray-700 mt-2">
             <strong>Time Quantum:</strong> {timeQuantum ? Number(timeQuantum).toFixed(1) : "--"} time units
