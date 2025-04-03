@@ -1,3 +1,4 @@
+
 import { Job, ScheduleResult, CPUTimeSlot, QueueSnapshot } from "./types";
 
 // Helper function to calculate average turnaround time
@@ -67,7 +68,8 @@ const takeQueueSnapshot = (
 export const calculateSRTN = (
   jobs: Job[], 
   cpuCount: number,
-  scheduleMode: "quantum" | "endTime" = "quantum"
+  scheduleMode: "quantum" | "endTime" = "endTime",
+  timeQuantum: number = 1
 ): ScheduleResult => {
   // Create deep copies of jobs to avoid modifying the original array
   let remainingJobs = deepCopyJobs(jobs);
@@ -89,7 +91,6 @@ export const calculateSRTN = (
   
   // For quantum-based scheduling
   let nextQuantumTime = 0;
-  const timeQuantum = 1; // Default time quantum for SRTN
   
   // Sort jobs by arrival time initially
   remainingJobs.sort(sortByArrivalTime);
@@ -118,8 +119,10 @@ export const calculateSRTN = (
     // Sort running jobs by remaining time (SRTN algorithm)
     runningJobs.sort(sortByRemainingTime);
     
-    // Take queue snapshot after sorting
-    if (newlyArrivedJobs.length > 0 || runningJobs.length > 0) {
+    // Take queue snapshot after sorting if jobs arrived or at quantum boundaries
+    if (newlyArrivedJobs.length > 0 || 
+        runningJobs.length > 0 || 
+        Math.abs(currentTime % timeQuantum) < 0.0001) {
       queueSnapshots.push(takeQueueSnapshot(currentTime, runningJobs));
     }
     
@@ -207,12 +210,12 @@ export const calculateSRTN = (
       }
       
       // Take a new queue snapshot after reassignment
-      if (runningJobs.length > 0) {
+      if (runningJobs.length > 0 || Math.abs(currentTime % timeQuantum) < 0.0001) {
         queueSnapshots.push(takeQueueSnapshot(currentTime, runningJobs));
       }
     }
     
-    // Find the time until the next event (job arrival, completion, or quantum boundary)
+    // Find the time until the next event (job arrival, completion, quantum boundary)
     let nextEventTime = Infinity;
     
     // Check next job arrival
@@ -223,6 +226,12 @@ export const calculateSRTN = (
     // For quantum-based scheduling, consider the next quantum boundary
     if (scheduleMode === "quantum") {
       nextEventTime = Math.min(nextEventTime, nextQuantumTime);
+    }
+    
+    // Add the next quantum boundary as a potential event time
+    const nextQuantumBoundary = Math.ceil(currentTime / timeQuantum) * timeQuantum;
+    if (nextQuantumBoundary > currentTime) {
+      nextEventTime = Math.min(nextEventTime, nextQuantumBoundary);
     }
     
     // Check job completions on CPUs
@@ -261,22 +270,9 @@ export const calculateSRTN = (
         
         // Check if job is completed
         if (job.remainingTime <= 0.00001) { // Using small epsilon for floating point comparison
-          // In quantum-based scheduling, if job completes before quantum ends,
-          // leave the CPU idle until the next quantum
-          if (scheduleMode === "quantum" && nextEventTime < nextQuantumTime) {
-            // Add idle slot from job completion to end of quantum
-            cpuTimeSlots.push({
-              cpuId: i,
-              jobId: "Idle",
-              startTime: nextEventTime,
-              endTime: nextQuantumTime,
-              isIdle: true
-            });
-            
-            // CPU remains idle until next quantum
-            cpuJobs[i] = null;
-          } else if (scheduleMode === "endTime") {
-            // For end-time scheduling, mark as completed
+          // In end-time scheduling
+          if (scheduleMode === "endTime") {
+            // Mark as completed
             completedJobs.push(job);
             
             // Record job completion
@@ -289,12 +285,17 @@ export const calculateSRTN = (
             // Free the CPU
             cpuJobs[i] = null;
             
-            // Immediately assign new job if available
-            if (runningJobs.length > 0) {
-              cpuJobs[i] = runningJobs.shift()!;
-              
-              if (jobStartTimes[cpuJobs[i]!.id] === null) {
-                jobStartTimes[cpuJobs[i]!.id] = nextEventTime;
+            // If there's remaining time until the next quantum boundary,
+            // add an idle slot for this CPU
+            const nextQuantumBoundary = Math.ceil(nextEventTime / timeQuantum) * timeQuantum;
+            if (nextQuantumBoundary > nextEventTime) {
+              // Immediately assign new job if available
+              if (runningJobs.length > 0) {
+                cpuJobs[i] = runningJobs.shift()!;
+                
+                if (jobStartTimes[cpuJobs[i]!.id] === null) {
+                  jobStartTimes[cpuJobs[i]!.id] = nextEventTime;
+                }
               }
             }
           }
@@ -302,28 +303,13 @@ export const calculateSRTN = (
       }
     }
     
-    // For quantum-based scheduling, handle job completions at quantum boundaries
-    if (scheduleMode === "quantum" && nextEventTime === nextQuantumTime) {
-      for (let i = 0; i < cpuCount; i++) {
-        if (cpuJobs[i] !== null && cpuJobs[i]!.remainingTime <= 0.00001) {
-          // Job completed
-          completedJobs.push(cpuJobs[i]!);
-          
-          // Record job completion
-          jobResults[cpuJobs[i]!.id] = {
-            startTime: jobStartTimes[cpuJobs[i]!.id]!,
-            endTime: nextEventTime,
-            turnaroundTime: nextEventTime - cpuJobs[i]!.arrivalTime,
-          };
-          
-          // Free the CPU
-          cpuJobs[i] = null;
-        }
-      }
-    }
-    
     // After the event, re-sort the running queue as priorities may have changed
     runningJobs.sort(sortByRemainingTime);
+    
+    // Take a queue snapshot at quantum boundaries
+    if (Math.abs(nextEventTime % timeQuantum) < 0.0001) {
+      queueSnapshots.push(takeQueueSnapshot(nextEventTime, runningJobs));
+    }
     
     // Advance time to next event
     currentTime = nextEventTime;
@@ -344,7 +330,7 @@ export const calculateSRTN = (
     queueSnapshots,
     averageTurnaroundTime,
     cpuUtilization,
-    timeQuantum: 1 // Default time quantum for SRTN
+    timeQuantum
   };
 };
 
@@ -352,7 +338,7 @@ export const calculateRoundRobin = (
   jobs: Job[],
   cpuCount: number,
   timeQuantum: number,
-  scheduleMode: "quantum" | "endTime" = "quantum"
+  scheduleMode: "quantum" | "endTime" = "endTime"
 ): ScheduleResult => {
   // Create deep copies of jobs to avoid modifying the original array
   let remainingJobs = deepCopyJobs(jobs);
@@ -402,8 +388,10 @@ export const calculateRoundRobin = (
     // Add newly arrived jobs to the queue
     readyQueue.push(...newlyArrivedJobs);
     
-    // Take queue snapshot if jobs arrived or queue changed
-    if (newlyArrivedJobs.length > 0 || readyQueue.length > 0) {
+    // Take queue snapshot if jobs arrived or at quantum boundaries
+    if (newlyArrivedJobs.length > 0 || 
+        readyQueue.length > 0 || 
+        Math.abs(currentTime % timeQuantum) < 0.0001) {
       queueSnapshots.push(takeQueueSnapshot(currentTime, readyQueue));
     }
     
@@ -481,6 +469,12 @@ export const calculateRoundRobin = (
       nextEventTime = Math.min(nextEventTime, nextQuantumTime);
     }
     
+    // Add the next quantum boundary as a potential event time
+    const nextQuantumBoundary = Math.ceil(currentTime / timeQuantum) * timeQuantum;
+    if (nextQuantumBoundary > currentTime) {
+      nextEventTime = Math.min(nextEventTime, nextQuantumBoundary);
+    }
+    
     // Check quantum expirations and job completions on CPUs
     for (let i = 0; i < cpuCount; i++) {
       if (cpuJobs[i] !== null) {
@@ -488,18 +482,10 @@ export const calculateRoundRobin = (
         const timeUntilJobCompletes = cpuJobs[i]!.remainingTime;
         const timeUntilQuantumExpires = cpuTimeRemaining[i];
         
-        // For quantum-based, jobs only end at quantum boundaries
-        if (scheduleMode === "quantum") {
-          if (timeUntilJobCompletes < timeUntilQuantumExpires) {
-            // Job will complete before quantum expires
-            nextEventTime = Math.min(nextEventTime, currentTime + timeUntilJobCompletes);
-          }
-        } else {
-          // For end-time, consider both job completion and quantum expiration
-          const timeUntilEvent = Math.min(timeUntilJobCompletes, timeUntilQuantumExpires);
-          if (timeUntilEvent > 0) {
-            nextEventTime = Math.min(nextEventTime, currentTime + timeUntilEvent);
-          }
+        // For end-time, consider both job completion and quantum expiration
+        const timeUntilEvent = Math.min(timeUntilJobCompletes, timeUntilQuantumExpires);
+        if (timeUntilEvent > 0) {
+          nextEventTime = Math.min(nextEventTime, currentTime + timeUntilEvent);
         }
       }
     }
@@ -532,22 +518,9 @@ export const calculateRoundRobin = (
         
         // Check if job is completed
         if (job.remainingTime <= 0.00001) {
-          // In quantum-based scheduling, if job completes before quantum ends,
-          // leave the CPU idle until the next quantum
-          if (scheduleMode === "quantum" && nextEventTime < nextQuantumTime) {
-            // Add idle slot from job completion to end of quantum
-            cpuTimeSlots.push({
-              cpuId: i,
-              jobId: "Idle",
-              startTime: nextEventTime,
-              endTime: nextQuantumTime,
-              isIdle: true
-            });
-            
-            // CPU remains idle until next quantum
-            cpuJobs[i] = null;
-          } else if (scheduleMode === "endTime") {
-            // For end-time scheduling, mark as completed
+          // For end-time scheduling
+          if (scheduleMode === "endTime") {
+            // Mark as completed
             completedJobs.push(job);
             
             // Record job completion
@@ -592,24 +565,9 @@ export const calculateRoundRobin = (
       }
     }
     
-    // For quantum-based scheduling, handle job completions at quantum boundaries
-    if (scheduleMode === "quantum" && nextEventTime === nextQuantumTime) {
-      for (let i = 0; i < cpuCount; i++) {
-        if (cpuJobs[i] !== null && cpuJobs[i]!.remainingTime <= 0.00001) {
-          // Job completed
-          completedJobs.push(cpuJobs[i]!);
-          
-          // Record job completion
-          jobResults[cpuJobs[i]!.id] = {
-            startTime: jobStartTimes[cpuJobs[i]!.id]!,
-            endTime: nextEventTime,
-            turnaroundTime: nextEventTime - cpuJobs[i]!.arrivalTime,
-          };
-          
-          // Free the CPU
-          cpuJobs[i] = null;
-        }
-      }
+    // Take a queue snapshot at quantum boundaries
+    if (Math.abs(nextEventTime % timeQuantum) < 0.0001) {
+      queueSnapshots.push(takeQueueSnapshot(nextEventTime, readyQueue));
     }
     
     // Advance time to next event
@@ -631,6 +589,6 @@ export const calculateRoundRobin = (
     queueSnapshots,
     averageTurnaroundTime,
     cpuUtilization,
-    timeQuantum // Include the time quantum used for this schedule
+    timeQuantum
   };
 };

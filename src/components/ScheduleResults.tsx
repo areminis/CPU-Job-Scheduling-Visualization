@@ -22,9 +22,7 @@ const ScheduleResults = ({
   if (!scheduleResult) return null;
 
   // Get time quantum from schedule result
-  const timeQuantum = activeAlgorithm === "RR" 
-    ? scheduleResult.timeQuantum 
-    : 1; // Default for SRTN
+  const timeQuantum = scheduleResult.timeQuantum || 1;
 
   return (
     <div className="bg-white rounded-lg p-4 shadow-md">
@@ -65,6 +63,7 @@ const ScheduleResults = ({
       <JobQueue 
         queueSnapshots={scheduleResult.queueSnapshots}
         jobs={jobs}
+        timeQuantum={timeQuantum}
       />
     </div>
   );

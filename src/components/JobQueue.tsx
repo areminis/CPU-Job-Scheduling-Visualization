@@ -5,9 +5,10 @@ import { QueueSnapshot, Job } from "@/lib/types";
 interface JobQueueProps {
   queueSnapshots: QueueSnapshot[];
   jobs: Job[];
+  timeQuantum?: number;
 }
 
-const JobQueue = ({ queueSnapshots, jobs }: JobQueueProps) => {
+const JobQueue = ({ queueSnapshots, jobs, timeQuantum = 1 }: JobQueueProps) => {
   const colors = [
     "bg-purple-400", "bg-blue-400", "bg-green-400", "bg-yellow-400", 
     "bg-red-400", "bg-pink-400", "bg-indigo-400", "bg-teal-400"
@@ -19,24 +20,39 @@ const JobQueue = ({ queueSnapshots, jobs }: JobQueueProps) => {
     return colors[index % colors.length];
   };
 
-  // Group snapshots by time to create timeline
+  // Group snapshots by time quantum to create timeline
   const timelineData = useMemo(() => {
     if (queueSnapshots.length === 0) return [];
 
     // Get unique timestamps
-    const timestamps = Array.from(
+    let timestamps = Array.from(
       new Set(queueSnapshots.map((snapshot) => snapshot.time))
     ).sort((a, b) => a - b);
 
+    // Add quantum-aligned timestamps if they don't exist
+    const maxTime = timestamps[timestamps.length - 1];
+    const quantumTimes = [];
+    
+    for (let t = 0; t <= maxTime; t += timeQuantum) {
+      quantumTimes.push(t);
+    }
+    
+    // Merge and deduplicate timestamps
+    timestamps = Array.from(new Set([...timestamps, ...quantumTimes])).sort((a, b) => a - b);
+
     // Create the timeline data
     return timestamps.map((time) => {
-      const snapshot = queueSnapshots.find((s) => s.time === time);
+      // Find the closest snapshot at or before this time
+      const snapshot = [...queueSnapshots]
+        .sort((a, b) => b.time - a.time)
+        .find((s) => s.time <= time);
+      
       return {
         time,
         queue: snapshot ? snapshot.readyQueue : []
       };
     });
-  }, [queueSnapshots]);
+  }, [queueSnapshots, timeQuantum]);
 
   if (timelineData.length === 0) {
     return <div className="text-gray-500 italic text-center py-4">No queue data available</div>;
@@ -74,6 +90,7 @@ const JobQueue = ({ queueSnapshots, jobs }: JobQueueProps) => {
               }}
             >
               <div className="border border-gray-300 rounded-md p-2 bg-white shadow-sm">
+                <div className="text-xs font-medium mb-1">Time: {data.time.toFixed(1)}</div>
                 {data.queue.length === 0 ? (
                   <div className="text-xs text-gray-500 italic">Empty</div>
                 ) : (

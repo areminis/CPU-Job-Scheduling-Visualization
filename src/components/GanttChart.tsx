@@ -1,4 +1,3 @@
-
 import { useMemo } from "react";
 import { CPUTimeSlot, Job } from "@/lib/types";
 
@@ -42,21 +41,29 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs, timeQuantum = 1 }: GanttChar
       // For each time slot in this CPU
       cpuSlots[i]?.forEach(slot => {
         const slotDuration = slot.endTime - slot.startTime;
-        const numQuantums = Math.ceil(slotDuration / timeQuantum);
         
-        // Split the slot into quantum-sized segments
-        for (let q = 0; q < numQuantums; q++) {
-          const segmentStart = slot.startTime + (q * timeQuantum);
-          const segmentEnd = Math.min(slot.endTime, segmentStart + timeQuantum);
+        // For slots less than or equal to a quantum, keep as is
+        if (slotDuration <= timeQuantum) {
+          result[i].push({...slot});
+          return;
+        }
+        
+        // For longer slots, break into quantum-sized segments
+        let currentStart = slot.startTime;
+        
+        while (currentStart < slot.endTime) {
+          const segmentEnd = Math.min(currentStart + timeQuantum, slot.endTime);
           
-          // Don't create segments with zero duration
-          if (segmentEnd > segmentStart) {
+          // Skip zero-duration segments
+          if (segmentEnd > currentStart) {
             result[i].push({
               ...slot,
-              startTime: segmentStart,
+              startTime: currentStart,
               endTime: segmentEnd
             });
           }
+          
+          currentStart = segmentEnd;
         }
       });
     }
@@ -66,7 +73,7 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs, timeQuantum = 1 }: GanttChar
 
   // Get job color by ID
   const getJobColor = (jobId: string, isIdle: boolean = false): string => {
-    if (isIdle) return "bg-gray-200"; // Light gray for idle slots
+    if (isIdle || jobId === "Idle") return "bg-gray-200"; // Light gray for idle slots
     const index = parseInt(jobId.replace("J", "")) - 1;
     return colors[index % colors.length];
   };
@@ -98,6 +105,18 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs, timeQuantum = 1 }: GanttChar
                 <div className="absolute -left-2 top-2 text-xs">{time}</div>
               </div>
             ))}
+            
+            {/* Time quantum grid lines */}
+            {Array.from({ length: Math.ceil(endTime / timeQuantum) }).map((_, i) => {
+              const position = (i * timeQuantum) / endTime * 100;
+              return (
+                <div
+                  key={`quantum-${i}`}
+                  className="absolute h-full border-l border-gray-200"
+                  style={{ left: `${position}%` }}
+                />
+              );
+            })}
           </div>
         </div>
       </div>
@@ -110,7 +129,7 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs, timeQuantum = 1 }: GanttChar
             {quantizedCpuSlots[cpuId]?.map((slot, index) => {
               const width = ((slot.endTime - slot.startTime) / endTime) * 100;
               const left = (slot.startTime / endTime) * 100;
-              const isIdle = slot.isIdle === true;
+              const isIdle = slot.isIdle === true || slot.jobId === "Idle";
               
               return (
                 <div
@@ -119,9 +138,9 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs, timeQuantum = 1 }: GanttChar
                   style={{
                     left: `${left}%`,
                     width: `${width}%`,
-                    minWidth: "24px",
+                    minWidth: "20px",
                     border: isIdle ? "1px dashed #666" : "none",
-                    borderRight: "1px solid rgba(255,255,255,0.5)" // Add separator between quantum blocks
+                    borderRight: "1px solid rgba(255,255,255,0.5)" // Visual separator between quantum blocks
                   }}
                 >
                   <span className={`text-xs font-medium ${isIdle ? "text-gray-600" : "text-white"} truncate px-1`}>
@@ -144,12 +163,10 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs, timeQuantum = 1 }: GanttChar
             <span className="text-sm">{job.id}</span>
           </div>
         ))}
-        {cpuTimeSlots.some(slot => slot.isIdle) && (
-          <div className="flex items-center">
-            <div className="w-4 h-4 mr-1 bg-gray-200 border border-gray-400 rounded"></div>
-            <span className="text-sm">Idle Time</span>
-          </div>
-        )}
+        <div className="flex items-center">
+          <div className="w-4 h-4 mr-1 bg-gray-200 border border-gray-400 rounded"></div>
+          <span className="text-sm">Idle Time</span>
+        </div>
       </div>
     </div>
   );

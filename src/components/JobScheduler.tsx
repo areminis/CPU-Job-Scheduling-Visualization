@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import JobList from "./JobList";
@@ -14,6 +15,8 @@ const JobScheduler = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null);
   const [activeAlgorithm, setActiveAlgorithm] = useState<"SRTN" | "RR" | "">("");
+  
+  // Fixed to "endTime" as reschedule by quantum option has been removed
   const scheduleMode = "endTime";
 
   const addJob = () => {
@@ -106,7 +109,8 @@ const JobScheduler = () => {
     const result = calculateSRTN(
       jobsWithResetTime, 
       Number(cpuCount),
-      scheduleMode
+      scheduleMode,
+      Number(timeQuantum) || 1 // Pass time quantum to SRTN algorithm
     );
     setScheduleResult(result);
     
