@@ -31,4 +31,5 @@ export interface ScheduleResult {
   queueSnapshots: QueueSnapshot[];
   averageTurnaroundTime: number;
   cpuUtilization: number;
+  timeQuantum?: number; // Added to store the time quantum used
 }

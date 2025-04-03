@@ -3,7 +3,6 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface JobControlsProps {
   cpuCount: number | "";
@@ -14,8 +13,6 @@ interface JobControlsProps {
   removeLastJob: () => void;
   calculateSRTNSchedule: () => void;
   calculateRoundRobinSchedule: () => void;
-  scheduleMode: "quantum" | "endTime";
-  setScheduleMode: (mode: "quantum" | "endTime") => void;
 }
 
 const JobControls = ({
@@ -26,9 +23,7 @@ const JobControls = ({
   addJob,
   removeLastJob,
   calculateSRTNSchedule,
-  calculateRoundRobinSchedule,
-  scheduleMode,
-  setScheduleMode
+  calculateRoundRobinSchedule
 }: JobControlsProps) => {
   return (
     <div className="space-y-4">
@@ -58,23 +53,6 @@ const JobControls = ({
             placeholder="Time Quantum"
           />
         </div>
-      </div>
-      
-      <div className="space-y-2">
-        <Label>Scheduling Mode</Label>
-        <ToggleGroup 
-          type="single" 
-          value={scheduleMode} 
-          onValueChange={(value) => value && setScheduleMode(value as "quantum" | "endTime")}
-          className="justify-start"
-        >
-          <ToggleGroupItem value="quantum" className="text-xs">
-            Reschedule by quantum
-          </ToggleGroupItem>
-          <ToggleGroupItem value="endTime" className="text-xs">
-            Reschedule by end time
-          </ToggleGroupItem>
-        </ToggleGroup>
       </div>
       
       <div className="flex gap-2">

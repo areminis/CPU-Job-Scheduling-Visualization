@@ -6,9 +6,10 @@ interface GanttChartProps {
   cpuTimeSlots: CPUTimeSlot[];
   cpuCount: number;
   jobs: Job[];
+  timeQuantum?: number;
 }
 
-const GanttChart = ({ cpuTimeSlots, cpuCount, jobs }: GanttChartProps) => {
+const GanttChart = ({ cpuTimeSlots, cpuCount, jobs, timeQuantum = 1 }: GanttChartProps) => {
   const colors = [
     "bg-purple-400", "bg-blue-400", "bg-green-400", "bg-yellow-400", 
     "bg-red-400", "bg-pink-400", "bg-indigo-400", "bg-teal-400"
@@ -30,6 +31,38 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs }: GanttChartProps) => {
     
     return result;
   }, [cpuTimeSlots, cpuCount]);
+
+  // Break down time slots into quantum-sized segments
+  const quantizedCpuSlots = useMemo(() => {
+    const result: { [cpuId: number]: CPUTimeSlot[] } = {};
+    
+    for (let i = 0; i < cpuCount; i++) {
+      result[i] = [];
+      
+      // For each time slot in this CPU
+      cpuSlots[i]?.forEach(slot => {
+        const slotDuration = slot.endTime - slot.startTime;
+        const numQuantums = Math.ceil(slotDuration / timeQuantum);
+        
+        // Split the slot into quantum-sized segments
+        for (let q = 0; q < numQuantums; q++) {
+          const segmentStart = slot.startTime + (q * timeQuantum);
+          const segmentEnd = Math.min(slot.endTime, segmentStart + timeQuantum);
+          
+          // Don't create segments with zero duration
+          if (segmentEnd > segmentStart) {
+            result[i].push({
+              ...slot,
+              startTime: segmentStart,
+              endTime: segmentEnd
+            });
+          }
+        }
+      });
+    }
+    
+    return result;
+  }, [cpuSlots, cpuCount, timeQuantum]);
 
   // Get job color by ID
   const getJobColor = (jobId: string, isIdle: boolean = false): string => {
@@ -74,7 +107,7 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs }: GanttChartProps) => {
         <div key={cpuId} className="flex mb-4 items-center">
           <div className="w-16 text-sm font-medium">CPU {cpuId + 1}</div>
           <div className="flex-1 relative h-10 bg-gray-100 rounded">
-            {cpuSlots[cpuId]?.map((slot, index) => {
+            {quantizedCpuSlots[cpuId]?.map((slot, index) => {
               const width = ((slot.endTime - slot.startTime) / endTime) * 100;
               const left = (slot.startTime / endTime) * 100;
               const isIdle = slot.isIdle === true;
@@ -87,7 +120,8 @@ const GanttChart = ({ cpuTimeSlots, cpuCount, jobs }: GanttChartProps) => {
                     left: `${left}%`,
                     width: `${width}%`,
                     minWidth: "24px",
-                    border: isIdle ? "1px dashed #666" : "none"
+                    border: isIdle ? "1px dashed #666" : "none",
+                    borderRight: "1px solid rgba(255,255,255,0.5)" // Add separator between quantum blocks
                   }}
                 >
                   <span className={`text-xs font-medium ${isIdle ? "text-gray-600" : "text-white"} truncate px-1`}>

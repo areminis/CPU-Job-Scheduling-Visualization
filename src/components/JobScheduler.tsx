@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import JobList from "./JobList";
@@ -15,7 +14,7 @@ const JobScheduler = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null);
   const [activeAlgorithm, setActiveAlgorithm] = useState<"SRTN" | "RR" | "">("");
-  const [scheduleMode, setScheduleMode] = useState<"quantum" | "endTime">("quantum");
+  const scheduleMode = "endTime";
 
   const addJob = () => {
     const newJobId = `J${jobs.length + 1}`;
@@ -168,8 +167,6 @@ const JobScheduler = () => {
           removeLastJob={removeLastJob}
           calculateSRTNSchedule={calculateSRTNSchedule}
           calculateRoundRobinSchedule={calculateRoundRobinSchedule}
-          scheduleMode={scheduleMode}
-          setScheduleMode={setScheduleMode}
         />
         
         <AlgorithmExplanation 

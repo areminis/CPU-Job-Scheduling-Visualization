@@ -21,11 +21,15 @@ const ScheduleResults = ({
 }: ScheduleResultsProps) => {
   if (!scheduleResult) return null;
 
+  // Get time quantum from schedule result
+  const timeQuantum = activeAlgorithm === "RR" 
+    ? scheduleResult.timeQuantum 
+    : 1; // Default for SRTN
+
   return (
     <div className="bg-white rounded-lg p-4 shadow-md">
       <h2 className="text-xl font-semibold mb-4">
-        {activeAlgorithm === "SRTN" ? "SRTN" : "Round Robin"} Schedule Results 
-        ({scheduleMode === "quantum" ? "Quantum Based" : "End Time Based"})
+        {activeAlgorithm === "SRTN" ? "SRTN" : "Round Robin"} Schedule Results
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
@@ -43,13 +47,9 @@ const ScheduleResults = ({
       <div className="mb-4">
         <p className="text-sm text-gray-600">
           {activeAlgorithm === "RR" ? 
-            scheduleMode === "quantum" ?
-              "Note: In Round Robin (Quantum Based), jobs execute for their full time quantum unless they complete. If a job completes before using its full quantum, the CPU remains idle until the next quantum cycle begins. Jobs are only rescheduled at the end of each quantum cycle." : 
-              "Note: In Round Robin (End Time Based), when a job completes or uses its full quantum, it's removed from CPU and placed at the end of the queue. New jobs are added to the queue, and the next job starts immediately without waiting for the next quantum cycle."
+            "Note: In Round Robin, when a job completes or uses its full quantum, it's removed from CPU and placed at the end of the queue. New jobs are added to the queue, and the next job starts immediately without waiting for the next quantum cycle."
             : 
-            scheduleMode === "quantum" ?
-              "Note: In SRTN (Quantum Based), jobs are scheduled based on shortest remaining time at quantum boundaries. If a job completes before its quantum ends, the CPU remains idle until the next quantum cycle begins. Jobs are only rescheduled at the end of each quantum cycle." :
-              "Note: In SRTN (End Time Based), when a job completes, the next job with the shortest remaining time starts immediately. If multiple CPUs can run a job simultaneously, CPU order determines priority."
+            "Note: In SRTN, when a job completes, the next job with the shortest remaining time starts immediately. If multiple CPUs can run a job simultaneously, CPU order determines priority."
           }
         </p>
       </div>
@@ -57,7 +57,8 @@ const ScheduleResults = ({
       <GanttChart 
         cpuTimeSlots={scheduleResult.cpuTimeSlots} 
         cpuCount={Number(cpuCount)} 
-        jobs={jobs} 
+        jobs={jobs}
+        timeQuantum={timeQuantum}
       />
       
       <h3 className="text-lg font-semibold mt-6 mb-3">Job Queue Timeline</h3>

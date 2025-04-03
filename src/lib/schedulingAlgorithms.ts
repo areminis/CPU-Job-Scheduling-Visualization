@@ -1,4 +1,3 @@
-
 import { Job, ScheduleResult, CPUTimeSlot, QueueSnapshot } from "./types";
 
 // Helper function to calculate average turnaround time
@@ -344,7 +343,8 @@ export const calculateSRTN = (
     cpuTimeSlots,
     queueSnapshots,
     averageTurnaroundTime,
-    cpuUtilization
+    cpuUtilization,
+    timeQuantum: 1 // Default time quantum for SRTN
   };
 };
 
@@ -630,6 +630,7 @@ export const calculateRoundRobin = (
     cpuTimeSlots,
     queueSnapshots,
     averageTurnaroundTime,
-    cpuUtilization
+    cpuUtilization,
+    timeQuantum // Include the time quantum used for this schedule
   };
 };
