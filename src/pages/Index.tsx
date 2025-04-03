@@ -10,7 +10,7 @@ const Index = () => {
             CPU Job Scheduling Visualization
           </h1>
           <p className="text-gray-600">
-            Interactive tool for SRTN and Round Robin scheduling algorithms with CPU switching overhead
+            Interactive tool for SRTN and Round Robin scheduling algorithms
           </p>
         </header>
         <main>

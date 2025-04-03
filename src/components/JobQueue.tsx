@@ -28,41 +28,8 @@ const JobQueue = ({ queueSnapshots, jobs }: JobQueueProps) => {
       new Set(queueSnapshots.map((snapshot) => snapshot.time))
     ).sort((a, b) => a - b);
 
-    // Filter snapshots to include only significant changes in the queue
-    const significantTimestamps: number[] = [];
-    let previousQueueState = "";
-
-    timestamps.forEach((time) => {
-      const snapshot = queueSnapshots.find((s) => s.time === time);
-      if (!snapshot) return;
-
-      const currentQueueState = snapshot.readyQueue
-        .map((job) => `${job.id}-${job.remainingTime.toFixed(1)}`)
-        .join(",");
-
-      if (currentQueueState !== previousQueueState) {
-        significantTimestamps.push(time);
-        previousQueueState = currentQueueState;
-      }
-    });
-
-    // Make sure we have a reasonable number of timestamps (max 8)
-    let displayTimestamps = significantTimestamps;
-    if (significantTimestamps.length > 8) {
-      // Take first, last and evenly distribute the rest
-      const step = Math.ceil((significantTimestamps.length - 2) / 6);
-      displayTimestamps = [
-        significantTimestamps[0],
-        ...significantTimestamps
-          .slice(1, -1)
-          .filter((_, i) => i % step === 0)
-          .slice(0, 6),
-        significantTimestamps[significantTimestamps.length - 1]
-      ];
-    }
-
     // Create the timeline data
-    return displayTimestamps.map((time) => {
+    return timestamps.map((time) => {
       const snapshot = queueSnapshots.find((s) => s.time === time);
       return {
         time,
@@ -76,9 +43,9 @@ const JobQueue = ({ queueSnapshots, jobs }: JobQueueProps) => {
   }
 
   return (
-    <div className="mt-4">
+    <div className="mt-8 pb-40"> {/* Added padding to bottom for job queue boxes */}
       {/* Timeline visualization */}
-      <div className="relative border-t border-gray-300 mb-8">
+      <div className="relative border-t border-gray-300">
         {/* Time markers */}
         <div className="flex justify-between relative">
           {timelineData.map((data, index) => (
@@ -114,14 +81,16 @@ const JobQueue = ({ queueSnapshots, jobs }: JobQueueProps) => {
                     {data.queue.map((job, jobIndex) => (
                       <div
                         key={`job-${index}-${jobIndex}`}
-                        className="text-xs flex items-center"
+                        className="text-xs whitespace-nowrap"
                       >
-                        <span className={`${getJobColor(job.id)} text-white px-1 py-0.5 rounded mr-1 font-medium`}>
-                          {job.id}
-                        </span>
-                        <span className="text-gray-700">
-                          = {job.remainingTime.toFixed(1)}
-                        </span>
+                        <div className="flex items-center">
+                          <span className={`${getJobColor(job.id)} text-white px-1 py-0.5 rounded mr-1 font-medium`}>
+                            {job.id}
+                          </span>
+                          <span className="text-gray-700">
+                            = {job.remainingTime.toFixed(1)}
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>
