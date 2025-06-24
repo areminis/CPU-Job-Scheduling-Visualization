@@ -3,6 +3,7 @@
 ## Project info
 
 **URL**: https://lovable.dev/projects/8b31c74a-c815-4c33-b48c-d7c2199b25a7
+**Netlify link**: https://joyful-fudge-d0eb99.netlify.app/
 
 ## How can I edit this code?
 
